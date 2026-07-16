@@ -3,8 +3,19 @@ import { connect, parseFragment } from "./libs/connection";
 import type { ClientMsg } from "./libs/protocol";
 import { useStore } from "./libs/store";
 
+const IMPACT_CLASS: Record<string, string> = {
+  highest: "border-highest text-highest",
+  high: "border-high text-high",
+  medium: "border-medium text-medium",
+  low: "text-low",
+};
+
+const badge = "text-[11px] px-2 py-0.5 rounded-full border border-border text-muted";
+const chromeButton =
+  "bg-transparent border border-border text-text rounded-md px-2.5 py-1 cursor-pointer hover:border-accent disabled:opacity-40 disabled:cursor-default disabled:hover:border-border";
+
 export default function App() {
-  const sendRef = useRef<(m: ClientMsg) => void>(() => {});
+  const sendRef = useRef<(m: ClientMsg) => void>(() => null);
   const { conn, walkthrough, files, scores, review, pending, selectedStep } = useStore();
   const { setConn, onServerMsg, selectStep } = useStore();
 
@@ -24,7 +35,7 @@ export default function App() {
     return (
       <Centered>
         <h1>diffthing</h1>
-        <p className="muted">
+        <p className="text-muted">
           {conn.kind === "connecting"
             ? "Connecting to your local daemon…"
             : "Connection failed — diagnosing…"}
@@ -38,7 +49,7 @@ export default function App() {
       <Centered>
         <h1>Can’t reach the daemon</h1>
         <p>{conn.detail}</p>
-        <p className="muted">
+        <p className="text-muted">
           Escape hatch: <code>npx diffthing --offline</code> serves this UI directly from 127.0.0.1
           — no hosted page, no browser gymnastics.
         </p>
@@ -63,13 +74,13 @@ export default function App() {
     walkthrough?.scopes.flatMap((s) => s.steps).find((s) => s.id === selectedStep) ?? null;
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <header>
+    <div className="grid grid-cols-[320px_1fr] min-h-screen">
+      <aside className="bg-panel border-r border-border p-4 flex flex-col gap-3 sticky top-0 h-screen overflow-y-auto">
+        <header className="flex items-center gap-2 flex-wrap">
           <strong>diffthing</strong>
           {walkthrough?.degraded && (
             <span
-              className="badge warn"
+              className={`${badge} border-warn text-warn`}
               title="LLM unavailable or failed validation — showing deterministic file-order walkthrough"
             >
               structure unavailable
@@ -79,7 +90,7 @@ export default function App() {
 
         {pending && (
           <button
-            className="banner"
+            className="bg-[#1d2735] border border-accent text-text rounded-md p-2.5 cursor-pointer text-left"
             onClick={() =>
               sendRef.current({
                 type: "apply_update",
@@ -94,15 +105,17 @@ export default function App() {
 
         {walkthrough?.scopes.map((scope) => (
           <section key={scope.id}>
-            <h2>{scope.title}</h2>
+            <h2 className="text-xs uppercase tracking-wider text-muted mt-3 mb-1">{scope.title}</h2>
             {scope.steps.map((s) => (
               <button
                 key={s.id}
-                className={`step ${s.id === selectedStep ? "active" : ""}`}
+                className={`flex flex-col w-full text-left bg-transparent border rounded-md text-text px-2.5 py-2 cursor-pointer hover:border-border ${
+                  s.id === selectedStep ? "border-accent" : "border-transparent"
+                }`}
                 onClick={() => selectStep(s.id)}
               >
                 <span>{s.title}</span>
-                <span className="muted">{s.framing}</span>
+                <span className="text-muted">{s.framing}</span>
               </button>
             ))}
           </section>
@@ -110,6 +123,7 @@ export default function App() {
 
         <footer>
           <button
+            className={chromeButton}
             onClick={() => sendRef.current({ type: "export_review" })}
             disabled={!review || review.flags.filter((f) => f.open).length === 0}
           >
@@ -118,29 +132,41 @@ export default function App() {
         </footer>
       </aside>
 
-      <main className="diff">
-        {!step && <p className="muted">Select a step to start reading.</p>}
+      <main className="p-6 flex flex-col gap-4">
+        {!step && <p className="text-muted">Select a step to start reading.</p>}
         {step?.hunks.map((id) => {
           const h = hunksByStep.all.get(id);
           if (!h) return null;
           const score = scores[id];
           const status = review?.status[id] ?? "unviewed";
           return (
-            <article key={id} className={`hunk ${status}`}>
-              <header>
+            <article
+              key={id}
+              className={`border rounded-lg overflow-hidden ${
+                status === "changed_since_viewed" ? "border-warn" : "border-border"
+              }`}
+            >
+              <header className="flex items-center gap-2 flex-wrap px-3 py-2 bg-panel border-b border-border">
                 <code>{h.path}</code>
                 {score && (
-                  <span className={`badge impact-${score.impact}`} title={score.reasons.join(", ")}>
+                  <span
+                    className={`${badge} ${IMPACT_CLASS[score.impact] ?? ""}`}
+                    title={score.reasons.join(", ")}
+                  >
                     {score.impact} — {score.reasons[0]}
                   </span>
                 )}
                 {status === "changed_since_viewed" && (
-                  <span className="badge warn">changed since viewed</span>
+                  <span className={`${badge} border-warn text-warn`}>changed since viewed</span>
                 )}
-                <button onClick={() => sendRef.current({ type: "mark_viewed", hunk: id })}>
+                <button
+                  className={chromeButton}
+                  onClick={() => sendRef.current({ type: "mark_viewed", hunk: id })}
+                >
                   {status === "viewed" ? "viewed ✓" : "mark viewed"}
                 </button>
                 <button
+                  className={chromeButton}
                   onClick={() => {
                     const comment = prompt("Flag comment:");
                     if (comment) sendRef.current({ type: "add_flag", hunk: id, comment });
@@ -149,11 +175,13 @@ export default function App() {
                   flag
                 </button>
               </header>
-              <pre>
+              <pre className="m-0 py-2 overflow-x-auto text-[13px]">
                 {h.lines.map((l, i) => (
                   <div
                     key={i}
-                    className={l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : ""}
+                    className={`px-3 whitespace-pre ${
+                      l.startsWith("+") ? "bg-add" : l.startsWith("-") ? "bg-del" : ""
+                    }`}
                   >
                     {l}
                   </div>
@@ -168,5 +196,7 @@ export default function App() {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="centered">{children}</div>;
+  return (
+    <div className="min-h-screen grid place-content-center text-center gap-2 p-6">{children}</div>
+  );
 }

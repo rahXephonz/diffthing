@@ -1,75 +1,29 @@
+@import "tailwindcss";
+
 /* diffthing — quiet, monospaced-forward reading surface.
    The diff is the interface; chrome stays out of the way. */
-:root {
-  --bg: #0f1115;
-  --panel: #161a20;
-  --border: #262c36;
-  --text: #d7dde6;
-  --muted: #8a93a2;
-  --accent: #6ea8fe;
-  --add: #1f3d2b;
-  --del: #46242a;
-  --warn: #b8860b;
-  --highest: #e5484d;
-  --high: #e5a03c;
-  --medium: #6ea8fe;
-  --low: #8a93a2;
+@theme {
+  --color-bg: #0f1115;
+  --color-panel: #161a20;
+  --color-border: #262c36;
+  --color-text: #d7dde6;
+  --color-muted: #8a93a2;
+  --color-accent: #6ea8fe;
+  --color-add: #1f3d2b;
+  --color-del: #46242a;
+  --color-warn: #b8860b;
+  --color-highest: #e5484d;
+  --color-high: #e5a03c;
+  --color-medium: #6ea8fe;
+  --color-low: #8a93a2;
+
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", monospace;
 }
-* { box-sizing: border-box; }
+
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 14px/1.6 ui-sans-serif, system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: 14px/1.6 var(--font-sans);
 }
-code, pre { font-family: ui-monospace, "JetBrains Mono", monospace; }
-.centered {
-  min-height: 100vh; display: grid; place-content: center;
-  text-align: center; gap: 8px; padding: 24px;
-}
-.muted { color: var(--muted); }
-.layout { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
-.sidebar {
-  background: var(--panel); border-right: 1px solid var(--border);
-  padding: 16px; display: flex; flex-direction: column; gap: 12px;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
-}
-.sidebar h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; }
-.step {
-  display: flex; flex-direction: column; width: 100%; text-align: left;
-  background: none; border: 1px solid transparent; border-radius: 6px;
-  color: var(--text); padding: 8px 10px; cursor: pointer;
-}
-.step:hover { border-color: var(--border); }
-.step.active { border-color: var(--accent); }
-.banner {
-  background: #1d2735; border: 1px solid var(--accent); color: var(--text);
-  border-radius: 6px; padding: 10px; cursor: pointer; text-align: left;
-}
-.diff { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-.hunk { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.hunk.changed_since_viewed { border-color: var(--warn); }
-.hunk header {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border);
-}
-.hunk pre { margin: 0; padding: 8px 0; overflow-x: auto; font-size: 13px; }
-.hunk pre div { padding: 0 12px; white-space: pre; }
-.hunk pre .add { background: var(--add); }
-.hunk pre .del { background: var(--del); }
-.badge {
-  font-size: 11px; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--border); color: var(--muted);
-}
-.badge.warn { border-color: var(--warn); color: var(--warn); }
-.badge.impact-highest { border-color: var(--highest); color: var(--highest); }
-.badge.impact-high { border-color: var(--high); color: var(--high); }
-.badge.impact-medium { border-color: var(--medium); color: var(--medium); }
-.badge.impact-low { color: var(--low); }
-button { font: inherit; }
-.hunk header button, footer button {
-  background: none; border: 1px solid var(--border); color: var(--text);
-  border-radius: 6px; padding: 4px 10px; cursor: pointer;
-}
-.hunk header button:hover, footer button:hover { border-color: var(--accent); }
-footer button:disabled { opacity: .4; cursor: default; }
