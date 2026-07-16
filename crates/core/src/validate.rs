@@ -77,8 +77,8 @@ pub fn validate(
                 .filter_map(|id| known_hunks.get(id))
                 .map(|&n| n as u64)
                 .sum();
-            if total > 0 {
-                let pct = ((last_lines * 100) / total) as u32;
+            if let Some(pct) = (last_lines * 100).checked_div(total) {
+                let pct = pct as u32;
                 if pct > cfg.max_last_scope_pct {
                     violations.push(Violation::DumpingGround {
                         scope: last.title.clone(),

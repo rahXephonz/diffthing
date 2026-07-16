@@ -4,6 +4,7 @@
 //!     the SPA as the first message — fragments never hit servers or logs)
 //!   - Origin allowlist: hosted origin + own loopback origin (offline mode)
 //!   - protocol version handshake is message #1 in both directions
+//!
 //! This is the defense against a malicious tab dialing the daemon.
 
 use crate::session::Session;
@@ -138,9 +139,9 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
     loop {
         tokio::select! {
             ev = events.recv() => {
-                match ev {
-                    Ok(msg) => { if !send(&mut socket, &msg).await { return; } }
-                    Err(_) => {} // lagged — snapshot-on-apply covers recovery
+                // Err(_): lagged — snapshot-on-apply covers recovery
+                if let Ok(msg) = ev {
+                    if !send(&mut socket, &msg).await { return; }
                 }
             }
             incoming = socket.recv() => {

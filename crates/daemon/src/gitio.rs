@@ -43,6 +43,8 @@ pub async fn tree_state(root: &Path, base: &str) -> std::io::Result<String> {
 
 /// Snapshot before agent dispatch — powers one-click revert.
 /// `git stash create` returns a commit ref WITHOUT touching the tree.
+/// Unused until M2 wires up agent dispatch (see CLAUDE.md).
+#[allow(dead_code)]
 pub async fn snapshot(root: &Path) -> std::io::Result<Option<String>> {
     let out = Command::new("git")
         .current_dir(root)

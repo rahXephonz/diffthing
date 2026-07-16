@@ -50,7 +50,7 @@ pub fn build_fallback(
         scopes.push((max_impact, Scope { id: format!("scope:{dir}"), title: dir, steps }));
     }
     // Highest-impact scopes first — even degraded mode respects reading order.
-    scopes.sort_by(|a, b| b.0.cmp(&a.0));
+    scopes.sort_by_key(|(impact, _)| std::cmp::Reverse(*impact));
 
     Walkthrough {
         schema_version: WALKTHROUGH_SCHEMA_VERSION,
