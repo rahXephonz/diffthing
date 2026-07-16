@@ -80,7 +80,7 @@ async fn main() -> anyhow_lite::Result<()> {
     println!("  open  {url}");
     println!();
 
-    server::serve(port, session).await
+    server::serve(port, session, cli.offline).await
 }
 
 /// Tiny local Result alias to avoid pulling anyhow for the scaffold.

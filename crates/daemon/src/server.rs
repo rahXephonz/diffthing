@@ -11,13 +11,22 @@ use crate::session::Session;
 use crate::{DAEMON_VERSION, HOSTED_ORIGIN};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
-use axum::http::{HeaderMap, HeaderValue};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
 use diffthing_core::protocol::{ClientMsg, ErrorCode, ServerMsg, PROTOCOL_VERSION};
+use rust_embed::RustEmbed;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+/// Built by `pnpm --filter diffthing-web build` — must exist at compile
+/// time. `--offline` serves this off the daemon's own port so the page and
+/// the WS target share one origin, sidestepping browser Local Network
+/// Access / Private Network Access permission gates entirely.
+#[derive(RustEmbed)]
+#[folder = "$CARGO_MANIFEST_DIR/../../web/dist/"]
+struct WebAssets;
 
 #[derive(Clone)]
 struct AppState {
@@ -28,11 +37,16 @@ struct AppState {
 pub async fn serve(
     port: u16,
     session: Arc<Session>,
+    offline: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
         .with_state(AppState { session, port });
+
+    if offline {
+        app = app.fallback(get(serve_asset));
+    }
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -77,6 +91,23 @@ fn origin_allowed(origin: &str, port: u16) -> bool {
         return origin == dev_origin;
     }
     false
+}
+
+/// `--offline` fallback: serves the embedded SPA build off the daemon's own
+/// port. Unknown paths fall back to `index.html` — this is a single-page
+/// app, the only real routing is the URL hash, never the path.
+async fn serve_asset(uri: Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
+    let path = if path.is_empty() { "index.html" } else { path };
+
+    match WebAssets::get(path).or_else(|| WebAssets::get("index.html")) {
+        Some(file) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            ([(axum::http::header::CONTENT_TYPE, mime.as_ref().to_string())], file.data)
+                .into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn ws_upgrade(
