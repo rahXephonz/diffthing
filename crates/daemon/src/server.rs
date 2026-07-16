@@ -63,9 +63,20 @@ async fn health(State(state): State<AppState>, headers: HeaderMap) -> impl IntoR
 }
 
 fn origin_allowed(origin: &str, port: u16) -> bool {
-    origin == HOSTED_ORIGIN
+    if origin == HOSTED_ORIGIN
         || origin == format!("http://127.0.0.1:{port}")
         || origin == format!("http://localhost:{port}")
+    {
+        return true;
+    }
+    // Dev-loop escape hatch for `pnpm dev` (vite on its own port) — compiled
+    // out of release builds, so it can't widen the allowlist in anything
+    // that ships. Opt-in only: unset means no extra origin, same as today.
+    #[cfg(debug_assertions)]
+    if let Ok(dev_origin) = std::env::var("DIFFTHING_DEV_ORIGIN") {
+        return origin == dev_origin;
+    }
+    false
 }
 
 async fn ws_upgrade(
