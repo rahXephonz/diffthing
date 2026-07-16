@@ -3,3 +3,8 @@ node_modules/
 dist/
 .diffthing/
 *.log
+# Added by code-review-graph
+.code-review-graph/
+
+.DS_Store
+.claude/settings.local.json

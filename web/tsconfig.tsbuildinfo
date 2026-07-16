@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/connection.ts","./src/main.tsx","./src/protocol.ts","./src/store.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/libs/connection.ts","./src/libs/protocol.ts","./src/libs/store.ts"],"version":"5.9.3"}

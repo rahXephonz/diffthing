@@ -11,8 +11,8 @@ token-gated WebSocket — the Drizzle Studio pattern.
 **AI organizes and executes. Only the human reviews.**
 The LLM's only job is structuring the diff into a walkthrough (grouping,
 naming, reading order). It never evaluates, never comments on quality,
-never approves. Agents may be dispatched to *execute* the human's judgment
-(fix flags), and reconciliation *verifies* their claims — but no judgment
+never approves. Agents may be dispatched to _execute_ the human's judgment
+(fix flags), and reconciliation _verifies_ their claims — but no judgment
 ever comes from a machine. If a feature request would make the AI judge
 code, the answer is no.
 
@@ -75,6 +75,7 @@ code, the answer is no.
 ## Milestones
 
 **M1 — close the core loop (next)**
+
 - [ ] Real LLM provider behind `LlmClient` (reqwest, BYO key from
       `~/.config/diffthing`, structured output → serde → validator gate).
       Prompt gets hunk DIGESTS (shape, not content) + impact scores +
@@ -92,6 +93,7 @@ code, the answer is no.
 - [ ] Timeline view: iteration N — flags addressed/untouched.
 
 **M2 — analyzers + dispatch**
+
 - [ ] TS/JS analyzer: tree-sitter module graph (fan-in) + export surface
       delta; incremental invalidation from watcher events.
 - [ ] Agent dispatch (`RequestChange`): git snapshot (`gitio::snapshot`) →
@@ -103,12 +105,14 @@ code, the answer is no.
 - [ ] Review export polish + per-runner prompt templates.
 
 **M3 — breadth**
+
 - [ ] Rust + Elixir analyzers (parse-level: pub surface; fan-in later).
 - [ ] `--base` branch mode UX; PR mode design.
 - [ ] MCP server exposing get_open_flags/mark_addressed (claims still
       verified by reconciliation).
 
 **M4 — differentiation**
+
 - [ ] Review-against-intent: `.diffthing/intent.toml` constraints
       (rendering strategy, bundle budget, token-only styling, dep
       allowlist) → violating hunks surface first with the violated rule as
@@ -126,3 +130,43 @@ code, the answer is no.
   reviews it."
 - Buyers who care: senior engineers, local-first crowd, security-conscious
   teams. They WILL audit the localhost security — invariant 6 is marketing.
+
+<!-- code-review-graph MCP tools -->
+
+## MCP Tools: code-review-graph
+
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
+
+### When to use graph tools FIRST
+
+- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
+- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
+- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
+- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview` + `list_communities`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Key Tools
+
+| Tool                        | Use when                                               |
+| --------------------------- | ------------------------------------------------------ |
+| `detect_changes`            | Reviewing code changes — gives risk-scored analysis    |
+| `get_review_context`        | Need source snippets for review — token-efficient      |
+| `get_impact_radius`         | Understanding blast radius of a change                 |
+| `get_affected_flows`        | Finding which execution paths are impacted             |
+| `query_graph`               | Tracing callers, callees, imports, tests, dependencies |
+| `semantic_search_nodes`     | Finding functions/classes by name or keyword           |
+| `get_architecture_overview` | Understanding high-level codebase structure            |
+| `refactor_tool`             | Planning renames, finding dead code                    |
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes` for code review.
+3. Use `get_affected_flows` to understand impact.
+4. Use `query_graph` pattern="tests_for" to check coverage.
