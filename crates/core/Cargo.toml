@@ -1,0 +1,17 @@
+[package]
+name = "diffthing-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[features]
+default = []
+ts-export = ["dep:ts-rs"]

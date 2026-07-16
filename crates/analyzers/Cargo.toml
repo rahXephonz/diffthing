@@ -1,0 +1,14 @@
+[package]
+name = "diffthing-analyzers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+diffthing-core = { path = "../core" }
+
+# NEXT (see CLAUDE.md M2): tree-sitter + grammars per ecosystem.
+# tree-sitter = "0.22"
+# tree-sitter-typescript = "0.21"
+# tree-sitter-rust = "0.21"
+# tree-sitter-elixir = "0.2"

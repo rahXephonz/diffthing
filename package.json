@@ -1,0 +1,10 @@
+{
+  "name": "diffthing-monorepo",
+  "private": true,
+  "scripts": {
+    "web:dev": "pnpm --filter diffthing-web dev",
+    "web:build": "pnpm --filter diffthing-web build",
+    "daemon:test": "cargo test --workspace",
+    "daemon:run": "cargo run -p diffthing"
+  }
+}
