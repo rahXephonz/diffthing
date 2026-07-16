@@ -11,13 +11,19 @@ use crate::session::Session;
 use crate::{DAEMON_VERSION, HOSTED_ORIGIN};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
 use diffthing_core::protocol::{ClientMsg, ErrorCode, ServerMsg, PROTOCOL_VERSION};
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+#[derive(Clone)]
+struct AppState {
+    session: Arc<Session>,
+    port: u16,
+}
 
 pub async fn serve(
     port: u16,
@@ -26,7 +32,7 @@ pub async fn serve(
     let app = Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
-        .with_state(session);
+        .with_state(AppState { session, port });
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -36,36 +42,46 @@ pub async fn serve(
 
 /// Probe endpoint for the SPA's connection diagnosis: if this answers but
 /// the WS fails, the problem is the browser (shields/PNA), not the daemon.
-async fn health() -> impl IntoResponse {
-    axum::Json(serde_json::json!({
+/// CORS-gated the same as `/ws`: the hosted SPA and an offline-mode tab are
+/// both cross-origin from the daemon's own port, so a plain fetch needs the
+/// allowlisted origin echoed back or the browser drops the response.
+async fn health(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let mut resp = axum::Json(serde_json::json!({
         "ok": true,
         "daemon": DAEMON_VERSION,
         "protocol": PROTOCOL_VERSION,
     }))
+    .into_response();
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        if origin_allowed(origin, state.port) {
+            if let Ok(v) = HeaderValue::from_str(origin) {
+                resp.headers_mut().insert(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
+            }
+        }
+    }
+    resp
 }
 
-fn origin_allowed(headers: &HeaderMap, port: u16) -> bool {
-    match headers.get("origin").and_then(|v| v.to_str().ok()) {
-        Some(o) => {
-            o == HOSTED_ORIGIN
-                || o == format!("http://127.0.0.1:{port}")
-                || o == format!("http://localhost:{port}")
-        }
-        // Non-browser clients (curl) send no Origin; allow — token still gates.
-        None => true,
-    }
+fn origin_allowed(origin: &str, port: u16) -> bool {
+    origin == HOSTED_ORIGIN
+        || origin == format!("http://127.0.0.1:{port}")
+        || origin == format!("http://localhost:{port}")
 }
 
 async fn ws_upgrade(
-    State(session): State<Arc<Session>>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    let port = 0; // Origin port check refined in M1 (pass real port via state).
-    if !origin_allowed(&headers, port) {
+    // Non-browser clients (curl) send no Origin; allow — token still gates.
+    let allowed = match headers.get("origin").and_then(|v| v.to_str().ok()) {
+        Some(o) => origin_allowed(o, state.port),
+        None => true,
+    };
+    if !allowed {
         return axum::http::StatusCode::FORBIDDEN.into_response();
     }
-    ws.on_upgrade(move |socket| handle_ws(socket, session)).into_response()
+    ws.on_upgrade(move |socket| handle_ws(socket, state.session)).into_response()
 }
 
 async fn send(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
