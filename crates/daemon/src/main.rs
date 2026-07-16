@@ -53,9 +53,7 @@ fn gen_token() -> String {
 #[tokio::main]
 async fn main() -> anyhow_lite::Result<()> {
     let cli = Cli::parse();
-    let repo = cli
-        .repo
-        .unwrap_or_else(|| std::env::current_dir().expect("cwd"));
+    let repo = cli.repo.unwrap_or_else(|| std::env::current_dir().expect("cwd"));
 
     if !gitio::is_git_repo(&repo) {
         eprintln!("diffthing: {} is not a git repository", repo.display());

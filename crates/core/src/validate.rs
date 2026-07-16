@@ -133,8 +133,7 @@ mod tests {
 
     #[test]
     fn full_coverage_passes() {
-        let known: BTreeMap<HunkId, u32> =
-            [(id("a"), 10), (id("b"), 5)].into_iter().collect();
+        let known: BTreeMap<HunkId, u32> = [(id("a"), 10), (id("b"), 5)].into_iter().collect();
         let w = wt(vec![Scope {
             id: "s1".into(),
             title: "s1".into(),
@@ -195,13 +194,16 @@ mod tests {
 
     #[test]
     fn buried_highest_detected() {
-        let known: BTreeMap<HunkId, u32> =
-            [(id("a"), 10), (id("hot"), 2)].into_iter().collect();
+        let known: BTreeMap<HunkId, u32> = [(id("a"), 10), (id("hot"), 2)].into_iter().collect();
         let scores: BTreeMap<HunkId, ImpactScore> =
             [(id("hot"), score(Impact::Highest))].into_iter().collect();
         let w = wt(vec![
             Scope { id: "s1".into(), title: "main".into(), steps: vec![step("1", vec![id("a")])] },
-            Scope { id: "s2".into(), title: "support".into(), steps: vec![step("2", vec![id("hot")])] },
+            Scope {
+                id: "s2".into(),
+                title: "support".into(),
+                steps: vec![step("2", vec![id("hot")])],
+            },
         ]);
         let v = validate(&w, &known, &scores, &ValidatorConfig::default());
         assert!(v.contains(&Violation::BuriedHighest(id("hot"))));

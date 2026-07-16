@@ -74,14 +74,10 @@ pub async fn generate<L: LlmClient>(
 ) -> Walkthrough {
     use diffthing_core::validate::{validate, ValidatorConfig};
 
-    let known: BTreeMap<HunkId, u32> = hunks
-        .iter()
-        .map(|h| (h.id.clone(), h.added + h.removed))
-        .collect();
-    let digests: Vec<HunkDigest> = hunks
-        .iter()
-        .filter_map(|h| scores.get(&h.id).map(|s| digest(h, s)))
-        .collect();
+    let known: BTreeMap<HunkId, u32> =
+        hunks.iter().map(|h| (h.id.clone(), h.added + h.removed)).collect();
+    let digests: Vec<HunkDigest> =
+        hunks.iter().filter_map(|h| scores.get(&h.id).map(|s| digest(h, s))).collect();
 
     let cfg = ValidatorConfig::default();
     let mut violations_feedback: Vec<String> = Vec::new();

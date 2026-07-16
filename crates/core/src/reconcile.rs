@@ -108,9 +108,7 @@ pub fn apply_to_review(state: &mut ReviewState, report: &ReconcileReport) -> Vec
         // Viewed -> ChangedSinceViewed under the NEW id.
         if state.status_of(&lin.from) == HunkStatus::Viewed {
             state.status.remove(&lin.from);
-            state
-                .status
-                .insert(lin.to.clone(), HunkStatus::ChangedSinceViewed);
+            state.status.insert(lin.to.clone(), HunkStatus::ChangedSinceViewed);
             requeued.push(lin.to.clone());
         }
         // Flags migrate to the new id and gain an addressed CLAIM.
@@ -181,10 +179,7 @@ mod tests {
         let requeued = apply_to_review(&mut state, &r);
 
         assert_eq!(requeued.len(), 1);
-        assert_eq!(
-            state.status_of(&new[0].id),
-            HunkStatus::ChangedSinceViewed
-        );
+        assert_eq!(state.status_of(&new[0].id), HunkStatus::ChangedSinceViewed);
     }
 
     #[test]

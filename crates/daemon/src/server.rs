@@ -64,8 +64,7 @@ async fn ws_upgrade(
     if !origin_allowed(&headers, port) {
         return axum::http::StatusCode::FORBIDDEN.into_response();
     }
-    ws.on_upgrade(move |socket| handle_ws(socket, session))
-        .into_response()
+    ws.on_upgrade(move |socket| handle_ws(socket, session)).into_response()
 }
 
 async fn send(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
@@ -113,10 +112,7 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
 
     if !send(
         &mut socket,
-        &ServerMsg::HelloAck {
-            protocol: PROTOCOL_VERSION,
-            daemon_version: DAEMON_VERSION.into(),
-        },
+        &ServerMsg::HelloAck { protocol: PROTOCOL_VERSION, daemon_version: DAEMON_VERSION.into() },
     )
     .await
     {

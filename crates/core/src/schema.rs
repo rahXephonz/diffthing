@@ -66,10 +66,6 @@ pub struct Walkthrough {
 
 impl Walkthrough {
     pub fn all_hunk_ids(&self) -> Vec<&HunkId> {
-        self.scopes
-            .iter()
-            .flat_map(|s| s.steps.iter())
-            .flat_map(|st| st.hunks.iter())
-            .collect()
+        self.scopes.iter().flat_map(|s| s.steps.iter()).flat_map(|st| st.hunks.iter()).collect()
     }
 }

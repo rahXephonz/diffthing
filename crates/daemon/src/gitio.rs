@@ -32,16 +32,11 @@ pub async fn tree_state(root: &Path, base: &str) -> std::io::Result<String> {
         .output()
         .await?;
     let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
-    let diff = Command::new("git")
-        .current_dir(root)
-        .args(["diff", "--no-color", base])
-        .output()
-        .await?;
+    let diff =
+        Command::new("git").current_dir(root).args(["diff", "--no-color", base]).output().await?;
     use diffthing_core::hunk::hunk_id;
-    let lines: Vec<String> = String::from_utf8_lossy(&diff.stdout)
-        .lines()
-        .map(|s| s.to_string())
-        .collect();
+    let lines: Vec<String> =
+        String::from_utf8_lossy(&diff.stdout).lines().map(|s| s.to_string()).collect();
     let fp = hunk_id("__tree__", &lines).0;
     Ok(format!("{head}+{}", &fp[..8]))
 }

@@ -70,23 +70,20 @@ pub struct Registry {
 impl Registry {
     pub fn with_defaults(repo_root: &Path) -> Self {
         let analyzers: Vec<Box<dyn Analyzer>> = vec![Box::new(FallbackAnalyzer)];
-        let graph = analyzers
-            .iter()
-            .map(|a| a.build_graph(repo_root))
-            .fold(ModuleGraph::default(), |mut acc, g| {
+        let graph = analyzers.iter().map(|a| a.build_graph(repo_root)).fold(
+            ModuleGraph::default(),
+            |mut acc, g| {
                 acc.importers.extend(g.importers);
                 acc
-            });
+            },
+        );
         Self { analyzers, graph }
     }
 
     pub fn signals_for(&self, hunk: &Hunk) -> ExternalSignals {
         let path = Path::new(&hunk.path);
-        let analyzer = self
-            .analyzers
-            .iter()
-            .find(|a| a.matches(path))
-            .expect("fallback always matches");
+        let analyzer =
+            self.analyzers.iter().find(|a| a.matches(path)).expect("fallback always matches");
         ExternalSignals {
             importer_count: match self.graph.fan_in(&hunk.path) {
                 0 => None,

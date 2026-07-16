@@ -134,7 +134,9 @@ pub fn parse_unified_diff(input: &str) -> Vec<FileDiff> {
                 let new_start = nums.get(2).map(|t| parse_start(t)).unwrap_or(0);
                 cur_hunk = Some((old_start, new_start, Vec::new()));
             } else if let Some((_, _, lines)) = cur_hunk.as_mut() {
-                if line.starts_with('+') || line.starts_with('-') || line.starts_with(' ')
+                if line.starts_with('+')
+                    || line.starts_with('-')
+                    || line.starts_with(' ')
                     || line.starts_with('\\')
                 {
                     lines.push(line.to_string());

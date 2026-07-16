@@ -43,8 +43,14 @@ pub const DEFAULT_PRIORS: &[PathPrior] = &[
 ];
 
 const LOCKFILES: &[&str] = &[
-    "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "Cargo.lock",
-    "mix.lock", "poetry.lock", "bun.lockb", "bun.lock",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "Cargo.lock",
+    "mix.lock",
+    "poetry.lock",
+    "bun.lockb",
+    "bun.lock",
 ];
 
 fn is_lockfile(path: &str) -> bool {
@@ -55,9 +61,9 @@ fn is_lockfile(path: &str) -> bool {
 /// refinement behind the analyzers trait; this catches the 90% case.
 fn control_flow_touched(hunk: &Hunk) -> bool {
     const KEYWORDS: &[&str] = &[
-        "if ", "if(", "else", "match ", "case ", "switch", "for ", "for(",
-        "while ", "while(", "return", "throw ", "raise ", "await ", "async ",
-        "catch", "rescue", "unwrap", "?.", "&&", "||",
+        "if ", "if(", "else", "match ", "case ", "switch", "for ", "for(", "while ", "while(",
+        "return", "throw ", "raise ", "await ", "async ", "catch", "rescue", "unwrap", "?.", "&&",
+        "||",
     ];
     hunk.lines
         .iter()
@@ -67,20 +73,29 @@ fn control_flow_touched(hunk: &Hunk) -> bool {
 
 fn is_declarative_only(hunk: &Hunk) -> bool {
     let p = hunk.path.as_str();
-    p.ends_with(".css") || p.ends_with(".scss") || p.ends_with(".md")
-        || p.ends_with(".txt") || p.ends_with(".svg") || p.ends_with(".json")
+    p.ends_with(".css")
+        || p.ends_with(".scss")
+        || p.ends_with(".md")
+        || p.ends_with(".txt")
+        || p.ends_with(".svg")
+        || p.ends_with(".json")
 }
 
 fn adds_dependency(hunk: &Hunk) -> bool {
-    if !is_lockfile(&hunk.path) && !hunk.path.ends_with("package.json")
-        && !hunk.path.ends_with("Cargo.toml") && !hunk.path.ends_with("mix.exs")
+    if !is_lockfile(&hunk.path)
+        && !hunk.path.ends_with("package.json")
+        && !hunk.path.ends_with("Cargo.toml")
+        && !hunk.path.ends_with("mix.exs")
     {
         return false;
     }
     hunk.lines.iter().any(|l| {
         l.starts_with('+')
-            && (l.contains("resolved") || l.contains("version") || l.contains("integrity")
-                || l.contains(" = \"") || l.contains("\": \""))
+            && (l.contains("resolved")
+                || l.contains("version")
+                || l.contains("integrity")
+                || l.contains(" = \"")
+                || l.contains("\": \""))
     })
 }
 
@@ -176,7 +191,8 @@ mod tests {
     #[test]
     fn tiny_auth_control_flow_beats_big_css() {
         let auth = mk("src/auth/session.ts", &["+if (!token) return deny()"]);
-        let css: Vec<&str> = std::iter::repeat("+.btn { color: red }").take(300).collect::<Vec<_>>();
+        let css: Vec<&str> =
+            std::iter::repeat("+.btn { color: red }").take(300).collect::<Vec<_>>();
         let css = mk("src/styles/theme.css", &css);
         let none = ExternalSignals::default();
         let sa = score_hunk(&auth, &none);

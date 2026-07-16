@@ -20,13 +20,29 @@ pub const PROTOCOL_VERSION: u16 = 1;
 #[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
 pub enum ClientMsg {
     /// Must be the first message. Token echoes the URL fragment value.
-    Hello { protocol: u16, token: String },
-    MarkViewed { hunk: HunkId },
-    AddFlag { hunk: HunkId, comment: String },
-    CloseFlag { hunk: HunkId },
+    Hello {
+        protocol: u16,
+        token: String,
+    },
+    MarkViewed {
+        hunk: HunkId,
+    },
+    AddFlag {
+        hunk: HunkId,
+        comment: String,
+    },
+    CloseFlag {
+        hunk: HunkId,
+    },
     /// Anchored prompt dispatch — always attached to hunks, never free-form.
-    RequestChange { hunks: Vec<HunkId>, instruction: String, runner: String },
-    ApplyUpdate { to_revision: u64 },
+    RequestChange {
+        hunks: Vec<HunkId>,
+        instruction: String,
+        runner: String,
+    },
+    ApplyUpdate {
+        to_revision: u64,
+    },
     Regenerate,
     ExportReview,
 }
@@ -35,7 +51,10 @@ pub enum ClientMsg {
 #[serde(tag = "type", rename_all = "snake_case")]
 #[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
 pub enum ServerMsg {
-    HelloAck { protocol: u16, daemon_version: String },
+    HelloAck {
+        protocol: u16,
+        daemon_version: String,
+    },
     /// Full state on connect / after ApplyUpdate. Browser holds no durable state.
     Snapshot {
         walkthrough: Walkthrough,
@@ -49,10 +68,20 @@ pub enum ServerMsg {
         revision: u64,
         report: ReconcileReport,
     },
-    GenerationProgress { message: String },
-    DispatchStatus { job_id: String, status: JobStatus },
-    ReviewExport { markdown: String },
-    Error { code: ErrorCode, message: String },
+    GenerationProgress {
+        message: String,
+    },
+    DispatchStatus {
+        job_id: String,
+        status: JobStatus,
+    },
+    ReviewExport {
+        markdown: String,
+    },
+    Error {
+        code: ErrorCode,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

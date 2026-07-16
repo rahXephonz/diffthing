@@ -23,12 +23,7 @@ pub fn build_fallback(
     // group: dir -> file -> hunks
     let mut groups: BTreeMap<String, BTreeMap<String, Vec<&Hunk>>> = BTreeMap::new();
     for h in hunks {
-        groups
-            .entry(top_dir(&h.path))
-            .or_default()
-            .entry(h.path.clone())
-            .or_default()
-            .push(h);
+        groups.entry(top_dir(&h.path)).or_default().entry(h.path.clone()).or_default().push(h);
     }
 
     let mut scopes: Vec<(Impact, Scope)> = Vec::new();
@@ -52,10 +47,7 @@ pub fn build_fallback(
                 hunks: hs.iter().map(|h| h.id.clone()).collect(),
             });
         }
-        scopes.push((
-            max_impact,
-            Scope { id: format!("scope:{dir}"), title: dir, steps },
-        ));
+        scopes.push((max_impact, Scope { id: format!("scope:{dir}"), title: dir, steps }));
     }
     // Highest-impact scopes first — even degraded mode respects reading order.
     scopes.sort_by(|a, b| b.0.cmp(&a.0));
@@ -100,10 +92,8 @@ mod tests {
             .iter()
             .map(|h| (h.id.clone(), score_hunk(h, &ExternalSignals::default())))
             .collect();
-        let known: BTreeMap<_, _> = hunks
-            .iter()
-            .map(|h| (h.id.clone(), h.added + h.removed))
-            .collect();
+        let known: BTreeMap<_, _> =
+            hunks.iter().map(|h| (h.id.clone(), h.added + h.removed)).collect();
         let w = build_fallback(&hunks, &scores, "t", 1);
         let v = validate(&w, &known, &scores, &ValidatorConfig::default());
         assert!(v.is_empty(), "{v:?}");
@@ -112,10 +102,8 @@ mod tests {
 
     #[test]
     fn higher_impact_scope_comes_first() {
-        let hunks = vec![
-            mk("docs/notes.md", "+meh"),
-            mk("src/payment/charge.ts", "+if (x) throw e"),
-        ];
+        let hunks =
+            vec![mk("docs/notes.md", "+meh"), mk("src/payment/charge.ts", "+if (x) throw e")];
         let scores: BTreeMap<_, _> = hunks
             .iter()
             .map(|h| (h.id.clone(), score_hunk(h, &ExternalSignals::default())))

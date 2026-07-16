@@ -41,9 +41,7 @@ pub fn spawn(repo: PathBuf, session: Arc<Session>) {
             }
         })
         .expect("create watcher");
-        watcher
-            .watch(&repo, RecursiveMode::Recursive)
-            .expect("watch repo");
+        watcher.watch(&repo, RecursiveMode::Recursive).expect("watch repo");
         // Park the thread; watcher lives as long as the process.
         loop {
             std::thread::park();

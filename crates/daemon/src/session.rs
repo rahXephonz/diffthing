@@ -53,13 +53,10 @@ impl Session {
         let registry = Registry::with_defaults(repo);
         let files = gitio::diff_against(repo, base).await?;
         let hunks = all_hunks(&files);
-        let scores: BTreeMap<HunkId, ImpactScore> = hunks
-            .iter()
-            .map(|h| (h.id.clone(), score_hunk(h, &registry.signals_for(h))))
-            .collect();
+        let scores: BTreeMap<HunkId, ImpactScore> =
+            hunks.iter().map(|h| (h.id.clone(), score_hunk(h, &registry.signals_for(h)))).collect();
         let tree_state = gitio::tree_state(repo, base).await?;
-        let walkthrough =
-            llm::generate(&llm::NoopLlm, &hunks, &scores, &tree_state, 1, 2).await;
+        let walkthrough = llm::generate(&llm::NoopLlm, &hunks, &scores, &tree_state, 1, 2).await;
 
         let (events, _) = broadcast::channel(64);
         Ok(Self {
@@ -97,14 +94,9 @@ impl Session {
             let state = self.state.lock().await;
             state.walkthrough.revision + 1
         };
-        *self.pending.lock().await = Some(Pending {
-            revision,
-            files: new_files,
-            report: report.clone(),
-        });
-        let _ = self
-            .events
-            .send(ServerMsg::UpdateAvailable { revision, report });
+        *self.pending.lock().await =
+            Some(Pending { revision, files: new_files, report: report.clone() });
+        let _ = self.events.send(ServerMsg::UpdateAvailable { revision, report });
     }
 
     /// User clicked Apply. NOW the snapshot advances: review-state honesty
@@ -125,20 +117,12 @@ impl Session {
             .iter()
             .map(|h| (h.id.clone(), score_hunk(h, &self.registry.signals_for(h))))
             .collect();
-        let tree_state = gitio::tree_state(&self.repo, &self.base)
-            .await
-            .unwrap_or_else(|_| "unknown".into());
+        let tree_state =
+            gitio::tree_state(&self.repo, &self.base).await.unwrap_or_else(|_| "unknown".into());
         // Scaffold: regenerate via the gated pipeline (fallback today).
         // M1: replace with incremental assignment that preserves step order.
-        let walkthrough = llm::generate(
-            &llm::NoopLlm,
-            &hunks,
-            &scores,
-            &tree_state,
-            pending.revision,
-            2,
-        )
-        .await;
+        let walkthrough =
+            llm::generate(&llm::NoopLlm, &hunks, &scores, &tree_state, pending.revision, 2).await;
 
         state.files = pending.files;
         state.scores = scores;
@@ -150,11 +134,8 @@ impl Session {
         let state = self.state.lock().await;
         let mut out = String::from("## diffthing review export\n\n");
         for f in state.review.open_flags() {
-            if let Some(h) = state
-                .files
-                .iter()
-                .flat_map(|fd| fd.hunks.iter())
-                .find(|h| h.id == f.hunk)
+            if let Some(h) =
+                state.files.iter().flat_map(|fd| fd.hunks.iter()).find(|h| h.id == f.hunk)
             {
                 out.push_str(&format!(
                     "### {} (line {})\nhunk: `{}`\n\n> {}\n\n```diff\n{}\n```\n\n",
@@ -166,7 +147,9 @@ impl Session {
                 ));
             }
         }
-        out.push_str("Address only the flags above. Do not refactor, reformat, or touch unrelated files.\n");
+        out.push_str(
+            "Address only the flags above. Do not refactor, reformat, or touch unrelated files.\n",
+        );
         out
     }
 }
