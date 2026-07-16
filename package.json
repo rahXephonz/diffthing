@@ -4,7 +4,12 @@
   "scripts": {
     "web:dev": "pnpm --filter diffthing-web dev",
     "web:build": "pnpm --filter diffthing-web build",
+    "web:lint": "pnpm --filter diffthing-web lint",
+    "web:format": "pnpm --filter diffthing-web format",
     "daemon:test": "cargo test --workspace",
-    "daemon:run": "cargo run -p diffthing"
+    "daemon:run": "cargo run -p diffthing",
+    "daemon:fmt": "cargo fmt --all",
+    "daemon:fmt:check": "cargo fmt --all -- --check",
+    "daemon:clippy": "cargo clippy --workspace --all-targets -- -D warnings"
   }
 }
