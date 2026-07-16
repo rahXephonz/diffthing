@@ -11,5 +11,8 @@
     "daemon:fmt": "cargo fmt --all",
     "daemon:fmt:check": "cargo fmt --all -- --check",
     "daemon:clippy": "cargo clippy --workspace --all-targets -- -D warnings"
+  },
+  "devDependencies": {
+    "lefthook": "^2.1.10"
   }
 }

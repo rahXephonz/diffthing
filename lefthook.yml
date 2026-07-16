@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: code-review-graph
+      run: command -v code-review-graph >/dev/null 2>&1 && code-review-graph detect-changes --brief || true
+
+    - name: rustfmt
+      glob: "crates/**/*.rs"
+      run: cargo fmt --all -- --check
+
+    - name: clippy
+      glob: "crates/**/*.rs"
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+    - name: eslint
+      glob: "web/**/*.{ts,tsx}"
+      run: pnpm --filter diffthing-web lint
+
+    - name: prettier
+      glob: "web/**/*.{ts,tsx,css}"
+      run: pnpm --filter diffthing-web format:check
