@@ -2,9 +2,7 @@
 // the browser renders snapshots + events. No durable state lives here.
 
 import { create } from "zustand";
-import type {
-  ConnState,
-} from "./connection";
+import type { ConnState } from "./connection";
 import type {
   FileDiff,
   ImpactScore,

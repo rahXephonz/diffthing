@@ -1,29 +1,22 @@
 import { useEffect, useMemo, useRef } from "react";
-import { connect, parseFragment } from "./connection";
-import type { ClientMsg } from "./protocol";
-import { useStore } from "./store";
+import { connect, parseFragment } from "./libs/connection";
+import type { ClientMsg } from "./libs/protocol";
+import { useStore } from "./libs/store";
 
 export default function App() {
   const sendRef = useRef<(m: ClientMsg) => void>(() => {});
-  const { conn, walkthrough, files, scores, review, pending, selectedStep } =
-    useStore();
+  const { conn, walkthrough, files, scores, review, pending, selectedStep } = useStore();
   const { setConn, onServerMsg, selectStep } = useStore();
 
   useEffect(() => {
-    const { send, close } = connect(
-      parseFragment(location.hash),
-      setConn,
-      onServerMsg,
-    );
+    const { send, close } = connect(parseFragment(location.hash), setConn, onServerMsg);
     sendRef.current = send;
     return close;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hunksByStep = useMemo(() => {
-    const all = new Map(
-      files.flatMap((f) => f.hunks.map((h) => [h.id, h] as const)),
-    );
+    const all = new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, h] as const)));
     return { all };
   }, [files]);
 
@@ -46,8 +39,8 @@ export default function App() {
         <h1>Can’t reach the daemon</h1>
         <p>{conn.detail}</p>
         <p className="muted">
-          Escape hatch: <code>npx diffthing --offline</code> serves this UI
-          directly from 127.0.0.1 — no hosted page, no browser gymnastics.
+          Escape hatch: <code>npx diffthing --offline</code> serves this UI directly from 127.0.0.1
+          — no hosted page, no browser gymnastics.
         </p>
       </Centered>
     );
@@ -58,8 +51,8 @@ export default function App() {
       <Centered>
         <h1>Session ended</h1>
         <p>
-          The daemon restarted, so this tab’s token is stale. Rerun{" "}
-          <code>npx diffthing</code> and open the new URL it prints.
+          The daemon restarted, so this tab’s token is stale. Rerun <code>npx diffthing</code> and
+          open the new URL it prints.
         </p>
       </Centered>
     );
@@ -67,9 +60,7 @@ export default function App() {
 
   // connected
   const step =
-    walkthrough?.scopes
-      .flatMap((s) => s.steps)
-      .find((s) => s.id === selectedStep) ?? null;
+    walkthrough?.scopes.flatMap((s) => s.steps).find((s) => s.id === selectedStep) ?? null;
 
   return (
     <div className="layout">
@@ -77,7 +68,10 @@ export default function App() {
         <header>
           <strong>diffthing</strong>
           {walkthrough?.degraded && (
-            <span className="badge warn" title="LLM unavailable or failed validation — showing deterministic file-order walkthrough">
+            <span
+              className="badge warn"
+              title="LLM unavailable or failed validation — showing deterministic file-order walkthrough"
+            >
               structure unavailable
             </span>
           )}
@@ -94,8 +88,7 @@ export default function App() {
             }
           >
             Changes detected — {pending.report.changed.length} modified,{" "}
-            {pending.report.added.length} new,{" "}
-            {pending.report.removed.length} removed. Apply
+            {pending.report.added.length} new, {pending.report.removed.length} removed. Apply
           </button>
         )}
 
@@ -120,8 +113,7 @@ export default function App() {
             onClick={() => sendRef.current({ type: "export_review" })}
             disabled={!review || review.flags.filter((f) => f.open).length === 0}
           >
-            Export review ({review?.flags.filter((f) => f.open).length ?? 0}{" "}
-            open flags)
+            Export review ({review?.flags.filter((f) => f.open).length ?? 0} open flags)
           </button>
         </footer>
       </aside>
@@ -138,26 +130,20 @@ export default function App() {
               <header>
                 <code>{h.path}</code>
                 {score && (
-                  <span
-                    className={`badge impact-${score.impact}`}
-                    title={score.reasons.join(", ")}
-                  >
+                  <span className={`badge impact-${score.impact}`} title={score.reasons.join(", ")}>
                     {score.impact} — {score.reasons[0]}
                   </span>
                 )}
                 {status === "changed_since_viewed" && (
                   <span className="badge warn">changed since viewed</span>
                 )}
-                <button
-                  onClick={() => sendRef.current({ type: "mark_viewed", hunk: id })}
-                >
+                <button onClick={() => sendRef.current({ type: "mark_viewed", hunk: id })}>
                   {status === "viewed" ? "viewed ✓" : "mark viewed"}
                 </button>
                 <button
                   onClick={() => {
                     const comment = prompt("Flag comment:");
-                    if (comment)
-                      sendRef.current({ type: "add_flag", hunk: id, comment });
+                    if (comment) sendRef.current({ type: "add_flag", hunk: id, comment });
                   }}
                 >
                   flag
@@ -167,9 +153,7 @@ export default function App() {
                 {h.lines.map((l, i) => (
                   <div
                     key={i}
-                    className={
-                      l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : ""
-                    }
+                    className={l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : ""}
                   >
                     {l}
                   </div>
