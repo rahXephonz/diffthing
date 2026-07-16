@@ -1,0 +1,8 @@
+[workspace]
+changelog_update = true
+git_release_enable = true
+git_tag_enable = true
+# Flip on once crates carry license/description/repository metadata and
+# are actually meant for crates.io. Until then this only automates
+# versioning + changelog + git tags/releases.
+publish = false
