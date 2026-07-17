@@ -1,23 +1,37 @@
-import { useEffect, useMemo, useRef } from "react";
+import clsx from "clsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import DiffPane, { type ViewMode } from "./components/DiffPane";
 import { connect, parseFragment } from "./libs/connection";
-import type { ClientMsg } from "./libs/protocol";
+import { iconUrlForPath, preloadIconForPath, STATUS_CLASS, STATUS_LETTER } from "./libs/fileIcon";
+import type { ClientMsg, Step } from "./libs/protocol";
 import { useStore } from "./libs/store";
-
-const IMPACT_CLASS: Record<string, string> = {
-  highest: "border-highest text-highest",
-  high: "border-high text-high",
-  medium: "border-medium text-medium",
-  low: "text-low",
-};
 
 const badge = "text-[11px] px-2 py-0.5 rounded-full border border-border text-muted";
 const chromeButton =
   "bg-transparent border border-border text-text rounded-md px-2.5 py-1 cursor-pointer hover:border-accent disabled:opacity-40 disabled:cursor-default disabled:hover:border-border";
 
+const FRAMING_COUNTS = /^\+(\d+) -(\d+) (.*)$/;
+
+/** Colorizes the fallback walkthrough's "+N -M in path" framing. LLM-
+ *  authored framing is free-form narrative text, not guaranteed to match —
+ *  falls back to plain text when it doesn't. */
+function FramingText({ text }: { text: string }) {
+  const match = FRAMING_COUNTS.exec(text);
+  if (!match) return <span className="text-muted">{text}</span>;
+  const [, added, removed, rest] = match;
+  return (
+    <span className="text-muted">
+      <span className="text-green-400">+{added}</span>{" "}
+      <span className="text-highest">-{removed}</span> {rest}
+    </span>
+  );
+}
+
 export default function App() {
   const sendRef = useRef<(m: ClientMsg) => void>(() => null);
   const { conn, walkthrough, files, scores, review, pending, selectedStep } = useStore();
   const { setConn, onServerMsg, selectStep } = useStore();
+  const [viewMode, setViewMode] = useState<ViewMode>("unified");
 
   useEffect(() => {
     const { send, close } = connect(parseFragment(location.hash), setConn, onServerMsg);
@@ -26,10 +40,46 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hunksByStep = useMemo(() => {
-    const all = new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, h] as const)));
-    return { all };
+  // Always auto-apply background updates — no manual Apply banner.
+  useEffect(() => {
+    if (pending) {
+      sendRef.current({ type: "apply_update", to_revision: pending.revision });
+    }
+  }, [pending]);
+
+  const hunksById = useMemo(() => {
+    return new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, h] as const)));
   }, [files]);
+  const fileByPath = useMemo(() => new Map(files.map((f) => [f.path, f] as const)), [files]);
+
+  // A step's "primary file" for the sidebar icon/badge — the file its
+  // first hunk belongs to. Steps are usually single-file (narrative
+  // grouping is by concern, which tends to be per-file); multi-file steps
+  // just show the lead file, same convention as a commit's diffstat icon.
+  const primaryFileFor = (s: Step) => {
+    const hunk = hunksById.get(s.hunks[0]);
+    return hunk ? (fileByPath.get(hunk.path) ?? null) : null;
+  };
+
+  // Icons load lazily from node_modules (see fileIcon.ts) — preload the
+  // sidebar's icons once the walkthrough is known, then bump iconsVersion
+  // to force the re-render that picks up the now-resolved URLs.
+  const [iconsVersion, setIconsVersion] = useState(0);
+  useEffect(() => {
+    if (!walkthrough) return;
+    const paths = new Set<string>();
+    for (const scope of walkthrough.scopes) {
+      for (const s of scope.steps) {
+        const hunk = hunksById.get(s.hunks[0]);
+        const file = hunk ? fileByPath.get(hunk.path) : undefined;
+        if (file) paths.add(file.path);
+      }
+    }
+    if (paths.size === 0) return;
+    Promise.all([...paths].map((p) => preloadIconForPath(p))).then(() => {
+      setIconsVersion((v) => v + 1);
+    });
+  }, [walkthrough, hunksById, fileByPath]);
 
   if (conn.kind === "connecting" || conn.kind === "probing") {
     return (
@@ -72,9 +122,10 @@ export default function App() {
   // connected
   const step =
     walkthrough?.scopes.flatMap((s) => s.steps).find((s) => s.id === selectedStep) ?? null;
+  const stepHunks = (step?.hunks ?? []).map((id) => hunksById.get(id)).filter((h) => h != null);
 
   return (
-    <div className="grid grid-cols-[320px_1fr] min-h-screen">
+    <div className="grid grid-cols-[320px_1fr] h-screen">
       <aside className="bg-panel border-r border-border p-4 flex flex-col gap-3 sticky top-0 h-screen overflow-y-auto">
         <header className="flex items-center gap-2 flex-wrap">
           <strong>diffthing</strong>
@@ -88,36 +139,41 @@ export default function App() {
           )}
         </header>
 
-        {pending && (
-          <button
-            className="bg-[#1d2735] border border-accent text-text rounded-md p-2.5 cursor-pointer text-left"
-            onClick={() =>
-              sendRef.current({
-                type: "apply_update",
-                to_revision: pending.revision,
-              })
-            }
-          >
-            Changes detected — {pending.report.changed.length} modified,{" "}
-            {pending.report.added.length} new, {pending.report.removed.length} removed. Apply
-          </button>
-        )}
-
         {walkthrough?.scopes.map((scope) => (
           <section key={scope.id}>
             <h2 className="text-xs uppercase tracking-wider text-muted mt-3 mb-1">{scope.title}</h2>
-            {scope.steps.map((s) => (
-              <button
-                key={s.id}
-                className={`flex flex-col w-full text-left bg-transparent border rounded-md text-text px-2.5 py-2 cursor-pointer hover:border-border ${
-                  s.id === selectedStep ? "border-accent" : "border-transparent"
-                }`}
-                onClick={() => selectStep(s.id)}
-              >
-                <span>{s.title}</span>
-                <span className="text-muted">{s.framing}</span>
-              </button>
-            ))}
+            {scope.steps.map((s) => {
+              const file = primaryFileFor(s);
+              void iconsVersion; // re-run once preloaded icon URLs resolve
+              const iconUrl = file ? iconUrlForPath(file.path) : undefined;
+              return (
+                <button
+                  key={s.id}
+                  className={clsx(
+                    "flex flex-col w-full text-left bg-transparent border rounded-md text-text px-2.5 py-2 cursor-pointer hover:border-border",
+                    s.id === selectedStep ? "border-accent" : "border-transparent",
+                  )}
+                  onClick={() => selectStep(s.id)}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {iconUrl && <img src={iconUrl} alt="" className="w-4 h-4 shrink-0" />}
+                    {file && (
+                      <span
+                        className={clsx(
+                          "text-[10px] font-bold w-3 shrink-0 text-center",
+                          STATUS_CLASS[file.status],
+                        )}
+                        title={file.status}
+                      >
+                        {STATUS_LETTER[file.status]}
+                      </span>
+                    )}
+                    <span className="truncate">{s.title}</span>
+                  </span>
+                  <FramingText text={s.framing} />
+                </button>
+              );
+            })}
           </section>
         ))}
 
@@ -132,64 +188,42 @@ export default function App() {
         </footer>
       </aside>
 
-      <main className="p-6 flex flex-col gap-4">
-        {!step && <p className="text-muted">Select a step to start reading.</p>}
-        {step?.hunks.map((id) => {
-          const h = hunksByStep.all.get(id);
-          if (!h) return null;
-          const score = scores[id];
-          const status = review?.status[id] ?? "unviewed";
-          return (
-            <article
-              key={id}
-              className={`border rounded-lg overflow-hidden ${
-                status === "changed_since_viewed" ? "border-warn" : "border-border"
-              }`}
-            >
-              <header className="flex items-center gap-2 flex-wrap px-3 py-2 bg-panel border-b border-border">
-                <code>{h.path}</code>
-                {score && (
-                  <span
-                    className={`${badge} ${IMPACT_CLASS[score.impact] ?? ""}`}
-                    title={score.reasons.join(", ")}
-                  >
-                    {score.impact} — {score.reasons[0]}
-                  </span>
-                )}
-                {status === "changed_since_viewed" && (
-                  <span className={`${badge} border-warn text-warn`}>changed since viewed</span>
-                )}
+      <main className="h-screen flex flex-col overflow-hidden">
+        {!step && (
+          <div className="p-6">
+            <p className="text-muted">Select a step to start reading.</p>
+          </div>
+        )}
+        {step && (
+          <>
+            <div className="flex justify-end gap-1 px-4 py-2 border-b border-border">
+              {(["unified", "split"] as const).map((mode) => (
                 <button
-                  className={chromeButton}
-                  onClick={() => sendRef.current({ type: "mark_viewed", hunk: id })}
+                  key={mode}
+                  className={clsx(
+                    "text-xs px-2 py-1 rounded-md border cursor-pointer",
+                    viewMode === mode
+                      ? "border-accent text-accent"
+                      : "border-border text-muted hover:border-accent",
+                  )}
+                  onClick={() => setViewMode(mode)}
                 >
-                  {status === "viewed" ? "viewed ✓" : "mark viewed"}
+                  {mode}
                 </button>
-                <button
-                  className={chromeButton}
-                  onClick={() => {
-                    const comment = prompt("Flag comment:");
-                    if (comment) sendRef.current({ type: "add_flag", hunk: id, comment });
-                  }}
-                >
-                  flag
-                </button>
-              </header>
-              <pre className="m-0 py-2 overflow-x-auto text-[13px]">
-                {h.lines.map((l, i) => (
-                  <div
-                    key={i}
-                    className={`px-3 whitespace-pre ${
-                      l.startsWith("+") ? "bg-add" : l.startsWith("-") ? "bg-del" : ""
-                    }`}
-                  >
-                    {l}
-                  </div>
-                ))}
-              </pre>
-            </article>
-          );
-        })}
+              ))}
+            </div>
+            <div className="flex-1 min-h-0">
+              <DiffPane
+                hunks={stepHunks}
+                scores={scores}
+                statusOf={(id) => review?.status[id] ?? "unviewed"}
+                onMarkViewed={(id) => sendRef.current({ type: "mark_viewed", hunk: id })}
+                onFlag={(id, comment) => sendRef.current({ type: "add_flag", hunk: id, comment })}
+                viewMode={viewMode}
+              />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

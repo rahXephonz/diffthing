@@ -26,8 +26,13 @@ code, the answer is no.
    sees an unvalidated walkthrough.
 2. **Hunk identity = content hash** (path + normalized body, `core/hunk.rs`).
    Review state keys off this, never off ordinals or step positions.
-3. **The screen never moves under the reader.** Reconciliation runs in the
-   background; the served snapshot advances only on explicit `ApplyUpdate`.
+3. **Reconciliation applies automatically, integrity is enforced by
+   invariant 4, not by gating the snapshot.** Background changes apply the
+   moment they're reconciled — no manual "Apply" step. What used to guard
+   the reader (withholding the snapshot) is now the honesty rules below:
+   a hunk you already viewed that changes underneath you flips to
+   `ChangedSinceViewed` and re-enters the queue, so nothing is silently
+   lost even though the screen can move.
 4. **Honesty rules** (`core/reconcile.rs`): viewed hunk changed →
    `ChangedSinceViewed`, re-enters queue. Deleted flagged hunk → tombstone,
    comment preserved. Agent-changed flag → `addressed_claim` only; closing
