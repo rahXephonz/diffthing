@@ -4,22 +4,61 @@
 //! unit-tested there.
 
 use diffthing_core::hunk::{parse_unified_diff, FileDiff};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 pub fn is_git_repo(root: &Path) -> bool {
     root.join(".git").exists()
 }
 
-pub async fn diff_against(root: &Path, base: &str) -> std::io::Result<Vec<FileDiff>> {
+/// Full diff against `base`, INCLUDING untracked files. Plain `git diff`
+/// only ever sees tracked changes — agents create new files constantly, so
+/// that blind spot means agent-authored files are invisible to review.
+///
+/// Fix: snapshot the working tree (tracked + untracked, respecting
+/// .gitignore) into a throwaway index via `GIT_INDEX_FILE`, diff that
+/// against `base`, discard the temp index. Never touches the real
+/// `.git/index` — this stays a read-only operation from the user's POV.
+async fn diff_text(root: &Path, base: &str) -> std::io::Result<String> {
+    let tmp_index = std::env::temp_dir().join(format!(
+        "diffthing-index-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    ));
+
+    let result = diff_text_with_temp_index(root, base, &tmp_index).await;
+    let _ = std::fs::remove_file(&tmp_index);
+    result
+}
+
+async fn diff_text_with_temp_index(
+    root: &Path,
+    base: &str,
+    tmp_index: &PathBuf,
+) -> std::io::Result<String> {
+    Command::new("git")
+        .current_dir(root)
+        .env("GIT_INDEX_FILE", tmp_index)
+        .args(["add", "-A"])
+        .output()
+        .await?;
+
     // --no-color --no-ext-diff: stable machine output.
     // -U3 default context; hunk identity normalizes trailing ws anyway.
     let out = Command::new("git")
         .current_dir(root)
-        .args(["diff", "--no-color", "--no-ext-diff", base])
+        .env("GIT_INDEX_FILE", tmp_index)
+        .args(["diff", "--no-color", "--no-ext-diff", "--cached", base])
         .output()
         .await?;
-    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+pub async fn diff_against(root: &Path, base: &str) -> std::io::Result<Vec<FileDiff>> {
+    let text = diff_text(root, base).await?;
     Ok(parse_unified_diff(&text))
 }
 
@@ -32,11 +71,9 @@ pub async fn tree_state(root: &Path, base: &str) -> std::io::Result<String> {
         .output()
         .await?;
     let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
-    let diff =
-        Command::new("git").current_dir(root).args(["diff", "--no-color", base]).output().await?;
+    let diff = diff_text(root, base).await?;
     use diffthing_core::hunk::hunk_id;
-    let lines: Vec<String> =
-        String::from_utf8_lossy(&diff.stdout).lines().map(|s| s.to_string()).collect();
+    let lines: Vec<String> = diff.lines().map(|s| s.to_string()).collect();
     let fp = hunk_id("__tree__", &lines).0;
     Ok(format!("{head}+{}", &fp[..8]))
 }
