@@ -18,7 +18,32 @@
   --color-low: #8a93a2;
 
   --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", monospace;
+  /* Code blocks only (diff hunks) — chrome keeps --font-mono above. */
+  --font-code: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* Self-hosted: local-first product, no runtime call to Google Fonts.
+   Latin subset only — code diffs are ASCII-heavy. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2");
 }
 
 body {

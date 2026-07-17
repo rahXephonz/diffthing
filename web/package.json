@@ -12,8 +12,12 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.6",
+    "clsx": "^2.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "shiki": "^4.3.1",
+    "vscode-material-icons": "^0.1.1",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
