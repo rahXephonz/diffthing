@@ -141,6 +141,7 @@ export default function DiffPane({
     if (lang !== "text" && !highlighter.getLoadedLanguages().includes(lang as never)) {
       return undefined;
     }
+
     void langsVersion; // re-run this render when the loaded-langs set changes
     const model = models.get(hunk.id)!;
     const text = side === "old" ? model.oldText : model.newText;
