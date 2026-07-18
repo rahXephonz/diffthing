@@ -121,6 +121,8 @@ export default function DiffPane({
   }, [hunks, models, viewMode]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // react-virtual returns non-memoizable functions by design; component already virtualizes manually.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,
