@@ -49,7 +49,16 @@ reviews and approves.** Nothing below weakens that.
 
 7. Settings UI (agent selection, ignore globs) instead of TOML-only config.
 8. Opt-in error reporting and an update-available check.
-9. Distribution breadth: Homebrew, `cargo-binstall`, Scoop.
+9. Distribution breadth:
+    - **One-line shell installer** — `curl -fsSL https://diffthing.dev/install.sh | bash`
+      (Claude Code style). No Node/npm needed. Requires: CI uploads the raw
+      per-platform binaries (already built for the npm packages) as GitHub
+      Release assets with a checksums file; an `install.sh` that detects
+      OS/arch, downloads the matching binary from the latest release, verifies
+      the checksum, and installs to `~/.local/bin` (or `/usr/local/bin`); host
+      the script on `diffthing.dev` via Cloudflare Pages/Worker. A `.ps1`
+      variant covers Windows.
+    - Homebrew tap, `cargo-binstall`, Scoop.
 10. Docs site and a 60-second demo — the value is not obvious cold.
 11. Certificate-renewal automation for `local.diffthing.dev` (Let's Encrypt is
     90 days) as a scheduled job, so a release never silently ships an expired
