@@ -353,7 +353,7 @@ export default function DiffPane({
               >
                 {row.type !== "del" && (
                   <button
-                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100"
                     title="Comment on this line"
                     onClick={() => openComposer(anchorKey(item.hunk.id, row.rawIdx))}
                   >
