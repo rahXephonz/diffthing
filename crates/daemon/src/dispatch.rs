@@ -86,13 +86,15 @@ fn build_prompt(flagged: &[FlaggedHunk], instruction: &str) -> String {
 Make ONLY the changes described. Do not refactor, reformat, or touch files \
 that are not part of this request.\n\n",
     );
-    p.push_str("Reviewer's instruction:\n");
-    p.push_str(instruction.trim());
+    p.push_str(
+        "Reviewer's instruction (GitHub-flavored Markdown; interpret headings, lists, task lists, links, and fenced code as structured requirements):\n",
+    );
+    p.push_str(instruction.replace("\r\n", "\n").replace('\r', "\n").trim());
     p.push_str("\n\nThe change is anchored to these hunks:\n");
     for h in flagged {
         p.push_str(&format!("\n--- {} (around line {}) ---\n", h.path, h.line));
         if !h.comment.is_empty() {
-            p.push_str(&format!("reviewer note: {}\n", h.comment));
+            p.push_str(&format!("reviewer note (Markdown):\n{}\n", h.comment));
         }
         p.push_str(&h.body);
         p.push('\n');
