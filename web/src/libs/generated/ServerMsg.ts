@@ -8,4 +8,18 @@ import type { ReconcileReport } from "./ReconcileReport";
 import type { ReviewState } from "./ReviewState";
 import type { Walkthrough } from "./Walkthrough";
 
-export type ServerMsg = { "type": "hello_ack", protocol: number, daemon_version: string, llm: string, } | { "type": "snapshot", walkthrough: Walkthrough, files: Array<FileDiff>, scores: Record<HunkId, ImpactScore>, review: ReviewState, } | { "type": "update_available", revision: number, report: ReconcileReport, } | { "type": "generation_progress", message: string, } | { "type": "review_updated", review: ReviewState, } | { "type": "dispatch_status", job_id: string, status: JobStatus, detail: string | null, } | { "type": "review_export", markdown: string, } | { "type": "error", code: ErrorCode, message: string, };
+export type ServerMsg =
+  | { type: "hello_ack"; protocol: number; daemon_version: string; llm: string }
+  | {
+      type: "snapshot";
+      walkthrough: Walkthrough;
+      files: Array<FileDiff>;
+      scores: Record<HunkId, ImpactScore>;
+      review: ReviewState;
+    }
+  | { type: "update_available"; revision: number; report: ReconcileReport }
+  | { type: "generation_progress"; message: string }
+  | { type: "review_updated"; review: ReviewState }
+  | { type: "dispatch_status"; job_id: string; status: JobStatus; detail: string | null }
+  | { type: "review_export"; markdown: string }
+  | { type: "error"; code: ErrorCode; message: string };

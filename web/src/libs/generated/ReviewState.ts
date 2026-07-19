@@ -3,4 +3,8 @@ import type { Flag } from "./Flag";
 import type { HunkId } from "./HunkId";
 import type { HunkStatus } from "./HunkStatus";
 
-export interface ReviewState { status: Record<HunkId, HunkStatus>, flags: Array<Flag>, tombstones: Array<Flag>, }
+export interface ReviewState {
+  status: Record<HunkId, HunkStatus>;
+  flags: Array<Flag>;
+  tombstones: Array<Flag>;
+}

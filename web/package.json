@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "cargo run --manifest-path ../Cargo.toml -p diffthing-core --example export_typescript --features ts-export",
+    "prebuild": "cargo run --manifest-path ../Cargo.toml -p diffthing-core --example export_typescript --features ts-export && prettier --write src/libs/generated",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",

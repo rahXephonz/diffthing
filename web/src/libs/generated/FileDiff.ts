@@ -2,4 +2,9 @@
 import type { FileStatus } from "./FileStatus";
 import type { Hunk } from "./Hunk";
 
-export interface FileDiff { path: string, old_path: string | null, status: FileStatus, hunks: Array<Hunk>, }
+export interface FileDiff {
+  path: string;
+  old_path: string | null;
+  status: FileStatus;
+  hunks: Array<Hunk>;
+}

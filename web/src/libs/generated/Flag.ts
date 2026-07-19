@@ -2,4 +2,10 @@
 import type { FlagEntry } from "./FlagEntry";
 import type { HunkId } from "./HunkId";
 
-export interface Flag { hunk: HunkId, line: number | null, thread: Array<FlagEntry>, open: boolean, addressed_claim: boolean, }
+export interface Flag {
+  hunk: HunkId;
+  line: number | null;
+  thread: Array<FlagEntry>;
+  open: boolean;
+  addressed_claim: boolean;
+}

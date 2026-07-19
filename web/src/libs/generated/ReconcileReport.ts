@@ -2,4 +2,9 @@
 import type { HunkId } from "./HunkId";
 import type { Lineage } from "./Lineage";
 
-export interface ReconcileReport { carried: Array<HunkId>, changed: Array<Lineage>, added: Array<HunkId>, removed: Array<HunkId>, }
+export interface ReconcileReport {
+  carried: Array<HunkId>;
+  changed: Array<Lineage>;
+  added: Array<HunkId>;
+  removed: Array<HunkId>;
+}
