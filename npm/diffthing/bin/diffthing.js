@@ -58,7 +58,18 @@ function main() {
   // forward through unchanged.
   const args = process.argv.slice(2);
 
-  const result = spawnSync(binary, args, { stdio: "inherit" });
+  let result = spawnSync(binary, args, { stdio: "inherit" });
+
+  // The prebuilt binary can arrive without its executable bit (some npm/CI
+  // extraction paths drop Unix mode bits). Restore it and retry once.
+  if (result.error && result.error.code === "EACCES") {
+    try {
+      require("node:fs").chmodSync(binary, 0o755);
+      result = spawnSync(binary, args, { stdio: "inherit" });
+    } catch {
+      /* fall through to the error handling below */
+    }
+  }
 
   if (result.error) {
     if (result.error.code === "ENOENT") {

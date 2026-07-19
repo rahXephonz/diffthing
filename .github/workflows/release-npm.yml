@@ -123,6 +123,15 @@ jobs:
           path: npm
           merge-multiple: true
 
+      # upload/download-artifact@v4 does not preserve Unix mode bits, so the
+      # non-Windows binaries arrive without +x. Restore it before packing.
+      - name: Restore binary executable bit
+        run: |
+          chmod +x npm/diffthing-darwin-arm64/bin/diffthing \
+                   npm/diffthing-darwin-x64/bin/diffthing \
+                   npm/diffthing-linux-x64/bin/diffthing \
+                   npm/diffthing-linux-arm64/bin/diffthing
+
       - name: Resolve version from tag
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"

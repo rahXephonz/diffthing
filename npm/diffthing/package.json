@@ -1,6 +1,6 @@
 {
   "name": "diffthing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first diff review for AI-assisted development. AI organizes the diff. Only you review.",
   "keywords": [
     "diff",
@@ -29,10 +29,10 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "diffthing-darwin-arm64": "0.1.0",
-    "diffthing-darwin-x64": "0.1.0",
-    "diffthing-linux-x64": "0.1.0",
-    "diffthing-linux-arm64": "0.1.0",
-    "diffthing-windows-x64": "0.1.0"
+    "diffthing-darwin-arm64": "0.1.1",
+    "diffthing-darwin-x64": "0.1.1",
+    "diffthing-linux-x64": "0.1.1",
+    "diffthing-linux-arm64": "0.1.1",
+    "diffthing-windows-x64": "0.1.1"
   }
 }
