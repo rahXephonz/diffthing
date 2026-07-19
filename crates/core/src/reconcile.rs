@@ -189,12 +189,7 @@ mod tests {
         let r = reconcile(&old, &new);
 
         let mut state = ReviewState::default();
-        state.flags.push(Flag {
-            hunk: old[0].id.clone(),
-            comment: "why is this here".into(),
-            open: true,
-            addressed_claim: false,
-        });
+        state.flags.push(Flag::new(old[0].id.clone(), None, "why is this here".into()));
         apply_to_review(&mut state, &r);
         assert!(state.flags.is_empty());
         assert_eq!(state.tombstones.len(), 1);
@@ -207,16 +202,31 @@ mod tests {
         let r = reconcile(&old, &new);
 
         let mut state = ReviewState::default();
-        state.flags.push(Flag {
-            hunk: old[0].id.clone(),
-            comment: "make it server-side".into(),
-            open: true,
-            addressed_claim: false,
-        });
+        state.flags.push(Flag::new(old[0].id.clone(), None, "make it server-side".into()));
         apply_to_review(&mut state, &r);
         assert_eq!(state.flags[0].hunk, new[0].id);
         assert!(state.flags[0].addressed_claim);
         assert!(state.flags[0].open, "closing remains a human click");
+    }
+
+    #[test]
+    fn thread_survives_hunk_migration() {
+        use crate::review::FlagEntryKind;
+        let old = vec![mk("a.ts", 10, "+bad fetch")];
+        let new = vec![mk("a.ts", 10, "+good fetch")];
+        let r = reconcile(&old, &new);
+
+        let mut state = ReviewState::default();
+        let mut flag = Flag::new(old[0].id.clone(), None, "make it server-side".into());
+        // Agent reports what it did — a claim rides along on the same flag.
+        flag.push(FlagEntryKind::AgentClaim, "moved fetch server-side".into(), 3);
+        state.flags.push(flag);
+
+        apply_to_review(&mut state, &r);
+        assert_eq!(state.flags[0].hunk, new[0].id, "flag migrated to new id");
+        assert_eq!(state.flags[0].thread.len(), 2, "human comment + agent claim preserved");
+        assert_eq!(state.flags[0].thread[1].kind, FlagEntryKind::AgentClaim);
+        assert!(state.flags[0].addressed_claim);
     }
 
     #[test]

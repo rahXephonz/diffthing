@@ -58,6 +58,11 @@ pub struct Walkthrough {
     pub revision: u64,
     /// Working-tree state this was generated against (git rev + dirty hash).
     pub tree_state: String,
+    /// "Review focus": 1-2 sentences describing the reading order's logic.
+    /// LLM-authored, validator-gated with the rest; None in fallback mode.
+    /// A *description* of the walk, never an evaluation of the code.
+    #[serde(default)]
+    pub focus: Option<String>,
     pub scopes: Vec<Scope>,
     /// True when the LLM was unavailable/failed validation and we fell back
     /// to the deterministic file-order walkthrough. Shown honestly in UI.

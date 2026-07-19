@@ -118,6 +118,7 @@ mod tests {
             schema_version: WALKTHROUGH_SCHEMA_VERSION,
             revision: 1,
             tree_state: "test".into(),
+            focus: None,
             scopes,
             degraded: false,
         }

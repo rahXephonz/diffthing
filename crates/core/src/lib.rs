@@ -3,6 +3,7 @@
 //! Invariant of the whole product: the LLM proposes, this crate verifies.
 //! Everything here must stay unit-testable to death.
 
+pub mod assign;
 pub mod fallback;
 pub mod hunk;
 pub mod protocol;

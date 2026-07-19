@@ -56,6 +56,7 @@ pub fn build_fallback(
         schema_version: WALKTHROUGH_SCHEMA_VERSION,
         revision,
         tree_state: tree_state.to_string(),
+        focus: None,
         scopes: scopes.into_iter().map(|(_, s)| s).collect(),
         degraded: true,
     }

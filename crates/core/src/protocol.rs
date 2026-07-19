@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -29,14 +29,25 @@ pub enum ClientMsg {
     },
     AddFlag {
         hunk: HunkId,
+        /// Index into the hunk's raw lines this comment anchors to, GitHub
+        /// per-line style. None = a hunk-level comment. Identity is still the
+        /// hunk (invariant 2); this is only a position within it.
+        #[serde(default)]
+        line: Option<u32>,
         comment: String,
     },
     CloseFlag {
         hunk: HunkId,
+        #[serde(default)]
+        line: Option<u32>,
     },
     /// Anchored prompt dispatch — always attached to hunks, never free-form.
     RequestChange {
         hunks: Vec<HunkId>,
+        /// Review thread anchor being dispatched. Claims return only to this
+        /// thread, never every open flag sharing the hunk.
+        #[serde(default)]
+        line: Option<u32>,
         instruction: String,
         runner: String,
     },
@@ -54,6 +65,9 @@ pub enum ServerMsg {
     HelloAck {
         protocol: u16,
         daemon_version: String,
+        /// Human label for the walkthrough organizer, e.g. "claude (your
+        /// login)" or "none (deterministic fallback)".
+        llm: String,
     },
     /// Full state on connect / after ApplyUpdate. Browser holds no durable state.
     Snapshot {
@@ -71,9 +85,20 @@ pub enum ServerMsg {
     GenerationProgress {
         message: String,
     },
+    /// Review state changed (comment added, flag closed, hunk viewed) without
+    /// the diff moving. Pushed so every tab reflects it immediately — the
+    /// browser holds no durable state, so a mutation the daemon doesn't echo
+    /// is invisible until reconnect. Lighter than a full Snapshot.
+    ReviewUpdated {
+        review: ReviewState,
+    },
     DispatchStatus {
         job_id: String,
         status: JobStatus,
+        /// Human-readable note: the agent's change summary on Done, the
+        /// revert reason on failure, the out-of-scope files on
+        /// ScopeViolation. None while merely Running.
+        detail: Option<String>,
     },
     ReviewExport {
         markdown: String,
