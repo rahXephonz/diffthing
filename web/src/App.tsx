@@ -90,39 +90,38 @@ export default function App() {
 
   if (conn.kind === "connecting" || conn.kind === "probing") {
     return (
-      <Centered>
-        <h1>diffthing</h1>
-        <p className="text-muted">
-          {conn.kind === "connecting"
-            ? "Connecting to your local daemon…"
-            : "Connection failed — diagnosing…"}
+      <Landing
+        tone="wait"
+        status={conn.kind === "connecting" ? "Connecting…" : "Diagnosing…"}
+      >
+        <p>
+          Reviewing changes on your machine. If this hangs, make sure the daemon is
+          still running in your project.
         </p>
-      </Centered>
+      </Landing>
     );
   }
 
   if (conn.kind === "diagnosed") {
     return (
-      <Centered>
-        <h1>Can’t reach the daemon</h1>
+      <Landing tone="error" status="Not connected">
         <p>{conn.detail}</p>
-        <p className="text-muted">
-          Escape hatch: <code>npx diffthing --offline</code> serves this UI directly from 127.0.0.1
-          — no hosted page, no browser gymnastics.
+        <p className="text-subtle">
+          Or run <Kbd>npx diffthing --offline</Kbd> to serve this UI directly from
+          127.0.0.1.
         </p>
-      </Centered>
+      </Landing>
     );
   }
 
   if (conn.kind === "session_ended") {
     return (
-      <Centered>
-        <h1>Session ended</h1>
+      <Landing tone="ended" status="Session ended">
         <p>
-          The daemon restarted, so this tab’s token is stale. Rerun <code>npx diffthing</code> and
-          open the new URL it prints.
+          The daemon restarted, so this tab’s token is stale. Rerun the command below
+          and open the fresh URL it prints.
         </p>
-      </Centered>
+      </Landing>
     );
   }
 
@@ -367,8 +366,57 @@ export default function App() {
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen grid place-content-center text-center gap-2 p-6">{children}</div>
+    <code className="font-mono text-[0.85em] text-text bg-panel border border-border rounded px-1.5 py-0.5">
+      {children}
+    </code>
+  );
+}
+
+// The landing / not-connected screen. Shown whenever the SPA has no live
+// daemon — mirrors Drizzle Studio's default state: branded, calm, and always
+// showing the one command that gets you running, instead of a bare error.
+function Landing({
+  tone,
+  status,
+  children,
+}: {
+  tone: "wait" | "error" | "ended";
+  status: string;
+  children: React.ReactNode;
+}) {
+  const dot =
+    tone === "error" ? "bg-highest" : tone === "ended" ? "bg-warn" : "bg-accent animate-pulse";
+  return (
+    <div className="min-h-screen grid place-content-center px-6">
+      <div className="flex w-[min(30rem,90vw)] flex-col items-center gap-7 text-center">
+        <div className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-text">
+          <span className="h-2.5 w-2.5 rounded-full bg-green shadow-[0_0_14px_2px] shadow-green/50" />
+          diffthing
+        </div>
+
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <span className={clsx("h-2 w-2 rounded-full", dot)} />
+          {status}
+        </div>
+
+        <div className="space-y-3 text-sm leading-relaxed text-muted">{children}</div>
+
+        <div className="w-full text-left">
+          <div className="mb-1.5 text-xs uppercase tracking-wide text-muted/70">
+            Run in your project
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-panel px-4 py-3 font-mono text-sm">
+            <span className="select-none text-muted">$</span>
+            <span className="text-text">npx diffthing</span>
+          </div>
+        </div>
+
+        <div className="text-xs text-muted/70">
+          AI organizes the diff. Only you review.
+        </div>
+      </div>
+    </div>
   );
 }
