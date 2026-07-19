@@ -138,18 +138,35 @@ jobs:
           npm pkg set "optionalDependencies.diffthing-win32-x64=${{ steps.ver.outputs.version }}"
 
       # Platform packages first so the launcher's optional deps resolve on npm.
+      # Idempotent: skip any name@version already on the registry, so re-runs
+      # after a partial publish don't 403 on existing versions. A short delay
+      # between publishes avoids npm's burst spam heuristic.
       - name: Publish platform packages
         working-directory: npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for dir in diffthing-*/; do
-            echo "Publishing $dir"
+            name=$(node -p "require('./$dir/package.json').name")
+            ver=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$ver" version >/dev/null 2>&1; then
+              echo "skip $name@$ver (already published)"
+              continue
+            fi
+            echo "Publishing $name@$ver"
             npm publish "$dir" --provenance --access public
+            sleep 15
           done
 
       - name: Publish launcher
         working-directory: npm/diffthing
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: |
+          name=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          if npm view "$name@$ver" version >/dev/null 2>&1; then
+            echo "skip $name@$ver (already published)"
+          else
+            npm publish --provenance --access public
+          fi
