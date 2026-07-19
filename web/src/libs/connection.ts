@@ -17,7 +17,7 @@ export type ConnState =
   | { kind: "connecting" }
   | { kind: "probing" }
   | { kind: "diagnosed"; diagnosis: Diagnosis; detail: string }
-  | { kind: "connected"; daemonVersion: string }
+  | { kind: "connected"; daemonVersion: string; llm: string }
   | { kind: "session_ended" };
 
 export interface FragmentParams {
@@ -99,7 +99,7 @@ export function connect(
     if (msg.type === "hello_ack") {
       settled = true;
       clearTimeout(timeout);
-      onState({ kind: "connected", daemonVersion: msg.daemon_version });
+      onState({ kind: "connected", daemonVersion: msg.daemon_version, llm: msg.llm });
       return;
     }
     if (msg.type === "error" && msg.code === "bad_token") {

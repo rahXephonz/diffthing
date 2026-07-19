@@ -5,7 +5,9 @@ import type { Highlighter, ThemedToken } from "shiki";
 import { buildHunkModel, type SplitCell, type UnifiedRow } from "../libs/diffRows";
 import { ensureLang, getHighlighter, tokenizeSide } from "../libs/highlighter";
 import { langFromPath } from "../libs/langFromPath";
-import type { Hunk, ImpactScore } from "../libs/protocol";
+import type { Flag, Hunk, ImpactScore } from "../libs/protocol";
+import type { DispatchState } from "../libs/store";
+import CommentThread from "./CommentThread";
 
 export type ViewMode = "unified" | "split";
 export type HunkStatus = "unviewed" | "viewed" | "changed_since_viewed";
@@ -15,15 +17,25 @@ interface Props {
   scores: Record<string, ImpactScore>;
   statusOf: (id: string) => HunkStatus;
   onMarkViewed: (id: string) => void;
-  onFlag: (id: string, comment: string) => void;
+  /** New thread OR reply. line = index into hunk.lines, or null (hunk-level). */
+  onFlag: (id: string, line: number | null, comment: string) => void;
+  onResolve: (id: string, line: number | null) => void;
+  onDispatch: (id: string, line: number | null, instruction: string) => void;
+  flags: Flag[];
+  dispatch: DispatchState | null;
   viewMode: ViewMode;
 }
 
+/** Stable composer/thread key for a comment anchor: a hunk line, or the
+ *  hunk itself ("H"). */
+const anchorKey = (hunkId: string, line: number | null) =>
+  `${hunkId}::${line === null ? "H" : line}`;
+
 const IMPACT_CLASS: Record<string, string> = {
-  highest: "border-highest text-highest",
-  high: "border-high text-high",
-  medium: "border-medium text-medium",
-  low: "text-low",
+  highest: "border-highest/60 text-highest bg-highest/10",
+  high: "border-high/60 text-high bg-high/10",
+  medium: "border-medium/60 text-medium bg-medium/10",
+  low: "border-low/40 text-low bg-low/10",
 };
 
 const badge = "text-[11px] px-2 py-0.5 rounded-full border border-border text-muted";
@@ -32,11 +44,13 @@ const chromeButton =
 
 const HEADER_HEIGHT = 41;
 const LINE_HEIGHT = 20;
+const THREAD_ESTIMATE = 160;
 
 type FlatRow =
   | { kind: "header"; hunk: Hunk }
   | { kind: "unified"; hunk: Hunk; row: UnifiedRow }
-  | { kind: "split"; hunk: Hunk; left: SplitCell | null; right: SplitCell | null };
+  | { kind: "split"; hunk: Hunk; left: SplitCell | null; right: SplitCell | null }
+  | { kind: "thread"; hunk: Hunk; line: number | null };
 
 function Tokens({ tokens, plain }: { tokens: ThemedToken[] | undefined; plain: string }) {
   if (!tokens) return <>{plain}</>;
@@ -69,9 +83,58 @@ export default function DiffPane({
   statusOf,
   onMarkViewed,
   onFlag,
+  onResolve,
+  onDispatch,
+  flags,
+  dispatch,
   viewMode,
 }: Props) {
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
+  // Composer state lives here (not per-row), keyed by anchor, so a draft
+  // survives the row unmounting when virtualization scrolls it out of view.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [composerOpen, setComposerOpen] = useState<Set<string>>(new Set());
+  const [expandedViewed, setExpandedViewed] = useState<Set<string>>(new Set());
+
+  const threadsAt = (id: string, line: number | null) =>
+    flags.filter((f) => f.hunk === id && (f.line ?? null) === line);
+  const threadKeys = useMemo(
+    () => new Set(flags.map((f) => anchorKey(f.hunk, f.line ?? null))),
+    [flags],
+  );
+  const showThreadAt = (id: string, line: number | null) => {
+    const k = anchorKey(id, line);
+    return threadKeys.has(k) || composerOpen.has(k);
+  };
+  const hunkCommentCount = (id: string) =>
+    flags.filter((f) => f.hunk === id).reduce((n, f) => n + f.thread.length, 0);
+  // Comments remain attached while collapsed. Header count tells reviewer
+  // they exist; expanding restores threads and drafts unchanged.
+  const isCollapsed = (id: string) => statusOf(id) === "viewed" && !expandedViewed.has(id);
+  const toggleViewed = (id: string) =>
+    setExpandedViewed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const openComposer = (k: string) => setComposerOpen((s) => new Set(s).add(k));
+  const closeComposer = (k: string) =>
+    setComposerOpen((s) => {
+      const n = new Set(s);
+      n.delete(k);
+      return n;
+    });
+  const setDraft = (k: string, v: string) => setDrafts((d) => ({ ...d, [k]: v }));
+  const submitDraft = (id: string, line: number | null) => {
+    const k = anchorKey(id, line);
+    const text = (drafts[k] ?? "").trim();
+    if (!text) return;
+    onFlag(id, line, text);
+    setDraft(k, "");
+    closeComposer(k);
+  };
   // Bumped once the langs needed by the current hunks finish loading —
   // tokensFor reads live off highlighter.getLoadedLanguages(), this exists
   // purely to force a re-render when that set changes underneath us.
@@ -109,16 +172,34 @@ export default function DiffPane({
     const rows: FlatRow[] = [];
     for (const hunk of hunks) {
       rows.push({ kind: "header", hunk });
+      if (isCollapsed(hunk.id)) continue;
+      // Hunk-level thread (the header 💬 button) sits directly under the
+      // header — never off-screen at the bottom of a long hunk.
+      if (showThreadAt(hunk.id, null)) rows.push({ kind: "thread", hunk, line: null });
       const model = models.get(hunk.id)!;
       if (viewMode === "unified") {
-        for (const row of model.unified) rows.push({ kind: "unified", hunk, row });
+        // Per-line: each diff line can carry its own thread, GitHub-style.
+        for (const row of model.unified) {
+          rows.push({ kind: "unified", hunk, row });
+          if (showThreadAt(hunk.id, row.rawIdx))
+            rows.push({ kind: "thread", hunk, line: row.rawIdx });
+        }
       } else {
-        for (const r of model.split)
+        for (const r of model.split) {
           rows.push({ kind: "split", hunk, left: r.left, right: r.right });
+          const anchors = new Set(
+            [r.left?.rawIdx, r.right?.rawIdx].filter((line): line is number => line !== undefined),
+          );
+          for (const line of anchors) {
+            if (showThreadAt(hunk.id, line)) rows.push({ kind: "thread", hunk, line });
+          }
+        }
       }
     }
     return rows;
-  }, [hunks, models, viewMode]);
+    // Depends on threadKeys + composerOpen (drive showThreadAt).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hunks, models, viewMode, threadKeys, composerOpen, expandedViewed, flags]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // react-virtual returns non-memoizable functions by design; component already virtualizes manually.
@@ -126,7 +207,12 @@ export default function DiffPane({
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (flatRows[i].kind === "header" ? HEADER_HEIGHT : LINE_HEIGHT),
+    estimateSize: (i) => {
+      const k = flatRows[i].kind;
+      if (k === "header") return HEADER_HEIGHT;
+      if (k === "thread") return THREAD_ESTIMATE; // measured precisely after mount
+      return LINE_HEIGHT;
+    },
     overscan: 20,
   });
 
@@ -189,20 +275,63 @@ export default function DiffPane({
                   </span>
                 )}
                 {status === "changed_since_viewed" && (
-                  <span className={`${badge} border-warn text-warn`}>changed since viewed</span>
+                  <span className={clsx(badge, "border-warn/60 text-warn bg-warn/10")}>
+                    changed since viewed
+                  </span>
                 )}
                 <button className={chromeButton} onClick={() => onMarkViewed(hunk.id)}>
                   {status === "viewed" ? "viewed ✓" : "mark viewed"}
                 </button>
+                {status === "viewed" && (
+                  <button className={chromeButton} onClick={() => toggleViewed(hunk.id)}>
+                    {isCollapsed(hunk.id) ? "expand" : "collapse"}
+                  </button>
+                )}
                 <button
                   className={chromeButton}
-                  onClick={() => {
-                    const comment = prompt("Flag comment:");
-                    if (comment) onFlag(hunk.id, comment);
-                  }}
+                  onClick={() => openComposer(anchorKey(hunk.id, null))}
+                  title="Comment on this hunk"
                 >
-                  flag
+                  💬 comment
+                  {hunkCommentCount(hunk.id) > 0 && (
+                    <span className="ml-1 text-accent">{hunkCommentCount(hunk.id)}</span>
+                  )}
                 </button>
+              </div>
+            );
+          }
+
+          if (item.kind === "thread") {
+            const { hunk, line } = item;
+            const k = anchorKey(hunk.id, line);
+            const threads = threadsAt(hunk.id, line);
+            return (
+              <div
+                key={vi.key}
+                data-index={vi.index}
+                ref={virtualizer.measureElement}
+                style={style}
+              >
+                <div
+                  className={clsx(
+                    viewMode === "split" && line !== null && "ml-[50%] w-[50%] box-border",
+                  )}
+                >
+                  <CommentThread
+                    flags={threads}
+                    dispatch={dispatch}
+                    draft={drafts[k] ?? ""}
+                    onDraftChange={(v) => setDraft(k, v)}
+                    onSubmit={() => submitDraft(hunk.id, line)}
+                    onResolve={() => onResolve(hunk.id, line)}
+                    onDispatch={(instruction) => onDispatch(hunk.id, line, instruction)}
+                    onCancel={() => {
+                      setDraft(k, "");
+                      closeComposer(k);
+                    }}
+                    composerOnly={composerOpen.has(k)}
+                  />
+                </div>
               </div>
             );
           }
@@ -218,10 +347,19 @@ export default function DiffPane({
                 ref={virtualizer.measureElement}
                 style={style}
                 className={clsx(
-                  "flex font-code text-[13px] whitespace-pre overflow-x-auto",
+                  "group relative flex font-code text-[13px] whitespace-pre overflow-x-auto",
                   ROW_BG[row.type],
                 )}
               >
+                {row.type !== "del" && (
+                  <button
+                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    title="Comment on this line"
+                    onClick={() => openComposer(anchorKey(item.hunk.id, row.rawIdx))}
+                  >
+                    +
+                  </button>
+                )}
                 <span
                   className={clsx(
                     "w-12 shrink-0 text-right pr-2 select-none",
@@ -257,7 +395,7 @@ export default function DiffPane({
             >
               <div
                 className={clsx(
-                  "flex-1 flex font-code text-[13px] whitespace-pre overflow-x-auto",
+                  "group relative flex flex-1 font-code text-[13px] whitespace-pre overflow-x-auto",
                   left && ROW_BG[left.type],
                 )}
               >
@@ -278,10 +416,19 @@ export default function DiffPane({
               <div className="w-px bg-border" />
               <div
                 className={clsx(
-                  "flex-1 flex font-code text-[13px] whitespace-pre overflow-x-auto",
+                  "group relative flex flex-1 font-code text-[13px] whitespace-pre overflow-x-auto",
                   right && ROW_BG[right.type],
                 )}
               >
+                {right && (
+                  <button
+                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    title="Comment on this line"
+                    onClick={() => openComposer(anchorKey(item.hunk.id, right.rawIdx))}
+                  >
+                    +
+                  </button>
+                )}
                 <span
                   className={clsx(
                     "w-12 shrink-0 text-right pr-2 select-none",

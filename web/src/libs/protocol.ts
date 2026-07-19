@@ -3,7 +3,7 @@
 // Rust structs (`cargo test --features ts-export` emits bindings). Until
 // then, this file is the single place to keep in sync.
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 4;
 
 export type Impact = "low" | "medium" | "high" | "highest";
 
@@ -47,15 +47,30 @@ export interface Walkthrough {
   schema_version: number;
   revision: number;
   tree_state: string;
+  /** Reading-order description ("review focus"). Null in fallback mode. */
+  focus: string | null;
   scopes: Scope[];
   degraded: boolean;
 }
 
 export type HunkStatus = "unviewed" | "viewed" | "changed_since_viewed";
 
+/** No "verdict" kind exists on purpose — the machine never judges the code. */
+export type FlagEntryKind = "human_comment" | "agent_claim" | "dispatch_note";
+
+export interface FlagEntry {
+  kind: FlagEntryKind;
+  body: string;
+  revision: number;
+}
+
 export interface Flag {
   hunk: string;
-  comment: string;
+  /** Index into hunk.lines this thread anchors to (per-line comment), or
+   *  null for a hunk-level comment. Render offset only — identity is the hunk. */
+  line: number | null;
+  /** Oldest-first: the human's comment, agent change-claims, dispatch notes. */
+  thread: FlagEntry[];
   open: boolean;
   addressed_claim: boolean;
 }
@@ -81,15 +96,21 @@ export interface ReconcileReport {
 export type ClientMsg =
   | { type: "hello"; protocol: number; token: string }
   | { type: "mark_viewed"; hunk: string }
-  | { type: "add_flag"; hunk: string; comment: string }
-  | { type: "close_flag"; hunk: string }
-  | { type: "request_change"; hunks: string[]; instruction: string; runner: string }
+  | { type: "add_flag"; hunk: string; line: number | null; comment: string }
+  | { type: "close_flag"; hunk: string; line: number | null }
+  | {
+      type: "request_change";
+      hunks: string[];
+      line: number | null;
+      instruction: string;
+      runner: string;
+    }
   | { type: "apply_update"; to_revision: number }
   | { type: "regenerate" }
   | { type: "export_review" };
 
 export type ServerMsg =
-  | { type: "hello_ack"; protocol: number; daemon_version: string }
+  | { type: "hello_ack"; protocol: number; daemon_version: string; llm: string }
   | {
       type: "snapshot";
       walkthrough: Walkthrough;
@@ -99,6 +120,12 @@ export type ServerMsg =
     }
   | { type: "update_available"; revision: number; report: ReconcileReport }
   | { type: "generation_progress"; message: string }
-  | { type: "dispatch_status"; job_id: string; status: string }
+  | { type: "review_updated"; review: ReviewState }
+  | {
+      type: "dispatch_status";
+      job_id: string;
+      status: "running" | "done" | "failed" | "timed_out_reverted" | "scope_violation";
+      detail: string | null;
+    }
   | { type: "review_export"; markdown: string }
   | { type: "error"; code: string; message: string };

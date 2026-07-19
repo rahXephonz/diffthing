@@ -11,6 +11,10 @@ export interface UnifiedRow {
    *  if this row has no counterpart on that side. */
   oldIdx: number | null;
   newIdx: number | null;
+  /** Index into hunk.lines — the stable per-line comment anchor. Stable as
+   *  long as the hunk content is (content hash), so keying a comment off it
+   *  respects invariant 2: identity is the hunk, this is a render offset. */
+  rawIdx: number;
 }
 
 export interface SplitCell {
@@ -18,6 +22,8 @@ export interface SplitCell {
   line: number;
   content: string;
   idx: number;
+  /** Index into hunk.lines for per-line review comments. */
+  rawIdx: number;
 }
 
 export interface SplitRow {
@@ -60,16 +66,20 @@ export function buildHunkModel(hunk: Hunk): HunkModel {
   // Split view: buffer consecutive del/add runs, pair them off row by row
   // (same convention GitHub/GitLab use), context lines flush the buffer.
   const split: SplitRow[] = [];
-  let delBuf: { line: number; idx: number; content: string }[] = [];
-  let addBuf: { line: number; idx: number; content: string }[] = [];
+  let delBuf: { line: number; idx: number; content: string; rawIdx: number }[] = [];
+  let addBuf: { line: number; idx: number; content: string; rawIdx: number }[] = [];
   const flushSplit = () => {
     const n = Math.max(delBuf.length, addBuf.length);
     for (let i = 0; i < n; i++) {
       const d = delBuf[i];
       const a = addBuf[i];
       split.push({
-        left: d ? { type: "del", line: d.line, content: d.content, idx: d.idx } : null,
-        right: a ? { type: "add", line: a.line, content: a.content, idx: a.idx } : null,
+        left: d
+          ? { type: "del", line: d.line, content: d.content, idx: d.idx, rawIdx: d.rawIdx }
+          : null,
+        right: a
+          ? { type: "add", line: a.line, content: a.content, idx: a.idx, rawIdx: a.rawIdx }
+          : null,
       });
     }
     delBuf = [];
@@ -79,7 +89,8 @@ export function buildHunkModel(hunk: Hunk): HunkModel {
   let oldLine = hunk.old_start;
   let newLine = hunk.new_start;
 
-  for (const raw of hunk.lines) {
+  for (let rawIdx = 0; rawIdx < hunk.lines.length; rawIdx++) {
+    const raw = hunk.lines[rawIdx];
     const type = classify(raw);
     if (type === "nonewline") continue;
     const text = stripMarker(raw);
@@ -96,17 +107,18 @@ export function buildHunkModel(hunk: Hunk): HunkModel {
       content: text,
       oldIdx,
       newIdx,
+      rawIdx,
     });
 
     if (type === "del") {
-      delBuf.push({ line: oldLine, idx: oldIdx!, content: text });
+      delBuf.push({ line: oldLine, idx: oldIdx!, content: text, rawIdx });
     } else if (type === "add") {
-      addBuf.push({ line: newLine, idx: newIdx!, content: text });
+      addBuf.push({ line: newLine, idx: newIdx!, content: text, rawIdx });
     } else {
       flushSplit();
       split.push({
-        left: { type: "context", line: oldLine, content: text, idx: oldIdx! },
-        right: { type: "context", line: newLine, content: text, idx: newIdx! },
+        left: { type: "context", line: oldLine, content: text, idx: oldIdx!, rawIdx },
+        right: { type: "context", line: newLine, content: text, idx: newIdx!, rawIdx },
       });
     }
 

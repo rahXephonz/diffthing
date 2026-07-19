@@ -17,6 +17,12 @@ interface PendingUpdate {
   report: ReconcileReport;
 }
 
+export interface DispatchState {
+  jobId: string;
+  status: "running" | "done" | "failed" | "timed_out_reverted" | "scope_violation";
+  detail: string | null;
+}
+
 interface Store {
   conn: ConnState;
   walkthrough: Walkthrough | null;
@@ -26,10 +32,15 @@ interface Store {
   pending: PendingUpdate | null;
   selectedStep: string | null;
   exportMarkdown: string | null;
+  /** Live line from the daemon while background organization runs. */
+  progress: string | null;
+  /** Latest agent-dispatch lifecycle status, or null when idle. */
+  dispatch: DispatchState | null;
 
   setConn: (c: ConnState) => void;
   onServerMsg: (m: ServerMsg) => void;
   selectStep: (id: string) => void;
+  clearDispatch: () => void;
 }
 
 export const useStore = create<Store>((set) => ({
@@ -41,6 +52,8 @@ export const useStore = create<Store>((set) => ({
   pending: null,
   selectedStep: null,
   exportMarkdown: null,
+  progress: null,
+  dispatch: null,
 
   setConn: (conn) => set({ conn }),
 
@@ -54,7 +67,21 @@ export const useStore = create<Store>((set) => ({
           scores: m.scores,
           review: m.review,
           pending: null,
+          progress: null,
         });
+        break;
+      case "dispatch_status":
+        // Terminal states linger so the reader sees the outcome; Running
+        // supersedes any stale prior result.
+        set({ dispatch: { jobId: m.job_id, status: m.status, detail: m.detail } });
+        break;
+      case "generation_progress":
+        set({ progress: m.message });
+        break;
+      case "review_updated":
+        // Review-only delta (comment, viewed-mark, flag close). Never
+        // touches the diff — keep everything else, swap review in place.
+        set({ review: m.review });
         break;
       case "update_available":
         // Banner only. The screen NEVER reflows on its own.
@@ -69,4 +96,5 @@ export const useStore = create<Store>((set) => ({
   },
 
   selectStep: (id) => set({ selectedStep: id }),
+  clearDispatch: () => set({ dispatch: null }),
 }));

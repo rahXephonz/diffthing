@@ -5,33 +5,41 @@ import { connect, parseFragment } from "./libs/connection";
 import { iconUrlForPath, preloadIconForPath, STATUS_CLASS, STATUS_LETTER } from "./libs/fileIcon";
 import type { ClientMsg, Step } from "./libs/protocol";
 import { useStore } from "./libs/store";
+import { basename, fileTotals } from "./libs/utils";
 
 const badge = "text-[11px] px-2 py-0.5 rounded-full border border-border text-muted";
 const chromeButton =
   "bg-transparent border border-border text-text rounded-md px-2.5 py-1 cursor-pointer hover:border-accent disabled:opacity-40 disabled:cursor-default disabled:hover:border-border";
 
-const FRAMING_COUNTS = /^\+(\d+) -(\d+) (.*)$/;
-
-/** Colorizes the fallback walkthrough's "+N -M in path" framing. LLM-
- *  authored framing is free-form narrative text, not guaranteed to match —
- *  falls back to plain text when it doesn't. */
-function FramingText({ text }: { text: string }) {
-  const match = FRAMING_COUNTS.exec(text);
-  if (!match) return <span className="text-muted">{text}</span>;
-  const [, added, removed, rest] = match;
+function Counts({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="text-muted">
+    <span className="tabular-nums whitespace-nowrap">
       <span className="text-green-400">+{added}</span>{" "}
-      <span className="text-highest">-{removed}</span> {rest}
+      <span className="text-highest">-{removed}</span>
     </span>
+  );
+}
+
+function StepDot({ done }: { done: boolean }) {
+  return done ? (
+    <span
+      className="w-4 h-4 shrink-0 rounded-full bg-green text-panel text-[10px] font-bold grid place-content-center"
+      title="all hunks viewed"
+    >
+      ✓
+    </span>
+  ) : (
+    <span className="w-4 h-4 shrink-0 rounded-full border border-border" title="unread" />
   );
 }
 
 export default function App() {
   const sendRef = useRef<(m: ClientMsg) => void>(() => null);
-  const { conn, walkthrough, files, scores, review, pending, selectedStep } = useStore();
+  const { conn, walkthrough, files, scores, review, pending, selectedStep, progress, dispatch } =
+    useStore();
   const { setConn, onServerMsg, selectStep } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>("unified");
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     const { send, close } = connect(parseFragment(location.hash), setConn, onServerMsg);
@@ -40,7 +48,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Always auto-apply background updates — no manual Apply banner.
   useEffect(() => {
     if (pending) {
       sendRef.current({ type: "apply_update", to_revision: pending.revision });
@@ -119,10 +126,22 @@ export default function App() {
     );
   }
 
-  // connected
-  const step =
-    walkthrough?.scopes.flatMap((s) => s.steps).find((s) => s.id === selectedStep) ?? null;
+  const scopeOfStep =
+    walkthrough?.scopes.find((sc) => sc.steps.some((s) => s.id === selectedStep)) ?? null;
+  const step = scopeOfStep?.steps.find((s) => s.id === selectedStep) ?? null;
   const stepHunks = (step?.hunks ?? []).map((id) => hunksById.get(id)).filter((h) => h != null);
+
+  const stepNumber = new Map<string, number>();
+  walkthrough?.scopes.flatMap((s) => s.steps).forEach((s, i) => stepNumber.set(s.id, i + 1));
+
+  const q = filter.trim().toLowerCase();
+  const stepMatches = (s: Step) =>
+    q === "" ||
+    s.title.toLowerCase().includes(q) ||
+    s.hunks.some((id) => hunksById.get(id)?.path.toLowerCase().includes(q));
+
+  const stepDone = (s: Step) =>
+    s.hunks.length > 0 && s.hunks.every((id) => review?.status[id] === "viewed");
 
   return (
     <div className="grid grid-cols-[320px_1fr] h-screen">
@@ -131,7 +150,7 @@ export default function App() {
           <strong>diffthing</strong>
           {walkthrough?.degraded && (
             <span
-              className={`${badge} border-warn text-warn`}
+              className={clsx(badge, "border-warn/60 text-warn bg-warn/10")}
               title="LLM unavailable or failed validation — showing deterministic file-order walkthrough"
             >
               structure unavailable
@@ -139,43 +158,135 @@ export default function App() {
           )}
         </header>
 
-        {walkthrough?.scopes.map((scope) => (
-          <section key={scope.id}>
-            <h2 className="text-xs uppercase tracking-wider text-muted mt-3 mb-1">{scope.title}</h2>
-            {scope.steps.map((s) => {
-              const file = primaryFileFor(s);
-              void iconsVersion; // re-run once preloaded icon URLs resolve
-              const iconUrl = file ? iconUrlForPath(file.path) : undefined;
-              return (
-                <button
-                  key={s.id}
-                  className={clsx(
-                    "flex flex-col w-full text-left bg-transparent border rounded-md text-text px-2.5 py-2 cursor-pointer hover:border-border",
-                    s.id === selectedStep ? "border-accent" : "border-transparent",
-                  )}
-                  onClick={() => selectStep(s.id)}
-                >
-                  <span className="flex items-center gap-1.5">
-                    {iconUrl && <img src={iconUrl} alt="" className="w-4 h-4 shrink-0" />}
-                    {file && (
-                      <span
-                        className={clsx(
-                          "text-[10px] font-bold w-3 shrink-0 text-center",
-                          STATUS_CLASS[file.status],
-                        )}
-                        title={file.status}
-                      >
-                        {STATUS_LETTER[file.status]}
-                      </span>
-                    )}
-                    <span className="truncate">{s.title}</span>
-                  </span>
-                  <FramingText text={s.framing} />
-                </button>
-              );
-            })}
+        <input
+          type="search"
+          placeholder="Filter files"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="bg-transparent border border-border rounded-md px-2.5 py-1.5 text-sm placeholder:text-muted outline-none"
+        />
+
+        {conn.kind === "connected" && (
+          <div className="text-xs text-muted truncate" title="walkthrough organizer">
+            {conn.llm}
+          </div>
+        )}
+
+        {progress && <div className="text-xs text-accent animate-pulse">{progress}</div>}
+
+        {walkthrough?.focus && (
+          <section>
+            <h2 className="text-xs uppercase tracking-wider text-muted mb-1">Review focus</h2>
+            <p className="text-sm text-muted leading-snug">{walkthrough.focus}</p>
           </section>
-        ))}
+        )}
+
+        <div className="flex items-center justify-between mt-1">
+          <h2 className="text-xs uppercase tracking-wider text-muted">Scope</h2>
+          <button
+            className="text-xs bg-transparent border-none text-muted cursor-pointer hover:text-accent"
+            onClick={() => sendRef.current({ type: "regenerate" })}
+            title="Re-run walkthrough organization"
+          >
+            Regenerate
+          </button>
+        </div>
+
+        {walkthrough?.scopes.map((scope) => {
+          const visible = scope.steps.filter(stepMatches);
+          if (visible.length === 0) return null;
+          return (
+            <section key={scope.id}>
+              <h2 className="text-xs uppercase tracking-wider text-muted mt-2 mb-1">
+                {scope.title}
+              </h2>
+              {visible.map((s) => {
+                const file = primaryFileFor(s);
+                void iconsVersion; // re-run once preloaded icon URLs resolve
+                const iconUrl = file ? iconUrlForPath(file.path) : undefined;
+                const { files: stepFiles, total } = fileTotals(s, hunksById);
+
+                return (
+                  <button
+                    key={s.id}
+                    className={clsx(
+                      "flex flex-col w-full text-left bg-transparent border rounded-md text-text px-2.5 py-2 cursor-pointer hover:border-border gap-1",
+                      s.id === selectedStep ? "border-green" : "border-transparent",
+                    )}
+                    onClick={() => selectStep(s.id)}
+                  >
+                    <span className="flex w-full min-w-0 items-start gap-1.5">
+                      <StepDot done={stepDone(s)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block whitespace-normal break-all font-medium leading-snug">
+                          {stepNumber.get(s.id)} {s.title}
+                        </span>
+                      </span>
+                      <span className="text-[11px] text-muted shrink-0 text-right leading-tight">
+                        {stepFiles.length}
+                        <br />
+                        {stepFiles.length === 1 ? "file" : "files"}
+                      </span>
+                    </span>
+                    {s.framing && (
+                      <span className="text-xs text-muted leading-snug">{s.framing}</span>
+                    )}
+                    <span className="flex flex-col gap-0.5 text-xs">
+                      {stepFiles.map((f) => (
+                        <span key={f.path} className="flex items-center gap-1.5">
+                          {iconUrl && f.path === file?.path && (
+                            <img src={iconUrl} alt="" className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          {file && f.path === file.path && (
+                            <span
+                              className={clsx(
+                                "text-[10px] font-bold w-3 shrink-0 text-center",
+                                STATUS_CLASS[file.status],
+                              )}
+                              title={file.status}
+                            >
+                              {STATUS_LETTER[file.status]}
+                            </span>
+                          )}
+                          <span
+                            className="min-w-0 flex-1 whitespace-normal break-all text-muted leading-snug"
+                            title={f.path}
+                          >
+                            {basename(f.path)}
+                          </span>
+                          <Counts added={f.added} removed={f.removed} />
+                        </span>
+                      ))}
+                      {stepFiles.length > 1 && (
+                        <span className="flex justify-end border-t border-border pt-0.5 mt-0.5">
+                          <Counts added={total.added} removed={total.removed} />
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </section>
+          );
+        })}
+
+        {dispatch && (
+          <div
+            className={clsx(
+              "text-[11px] rounded-md border px-2 py-1 leading-snug",
+              dispatch.status === "running" &&
+                "border-accent/60 text-accent bg-accent/10 animate-pulse",
+              dispatch.status === "done" && "border-green/60 text-green bg-green/10",
+              dispatch.status === "scope_violation" && "border-warn/60 text-warn bg-warn/10",
+              (dispatch.status === "failed" || dispatch.status === "timed_out_reverted") &&
+                "border-highest/60 text-highest bg-highest/10",
+            )}
+            title={dispatch.detail ?? undefined}
+          >
+            <strong className="capitalize">agent: {dispatch.status.replace(/_/g, " ")}</strong>
+            {dispatch.detail && <> — {dispatch.detail}</>}
+          </div>
+        )}
 
         <footer>
           <button
@@ -196,6 +307,19 @@ export default function App() {
         )}
         {step && (
           <>
+            <div className="px-4 py-3 border-b border-border">
+              {scopeOfStep && (
+                <div className="text-[11px] uppercase tracking-wider text-muted mb-0.5">
+                  {scopeOfStep.title}
+                </div>
+              )}
+              <h1 className="text-base font-semibold m-0">
+                {stepNumber.get(step.id)} {step.title}
+              </h1>
+              {step.framing && (
+                <p className="text-sm text-muted leading-snug mt-1 mb-0">{step.framing}</p>
+              )}
+            </div>
             <div className="flex justify-end gap-1 px-4 py-2 border-b border-border">
               {(["unified", "split"] as const).map((mode) => (
                 <button
@@ -218,7 +342,21 @@ export default function App() {
                 scores={scores}
                 statusOf={(id) => review?.status[id] ?? "unviewed"}
                 onMarkViewed={(id) => sendRef.current({ type: "mark_viewed", hunk: id })}
-                onFlag={(id, comment) => sendRef.current({ type: "add_flag", hunk: id, comment })}
+                onFlag={(id, line, comment) =>
+                  sendRef.current({ type: "add_flag", hunk: id, line, comment })
+                }
+                onResolve={(id, line) => sendRef.current({ type: "close_flag", hunk: id, line })}
+                onDispatch={(id, line, instruction) =>
+                  sendRef.current({
+                    type: "request_change",
+                    hunks: [id],
+                    line,
+                    instruction,
+                    runner: "auto",
+                  })
+                }
+                flags={review?.flags ?? []}
+                dispatch={dispatch}
                 viewMode={viewMode}
               />
             </div>
