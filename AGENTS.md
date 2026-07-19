@@ -1,15 +1,53 @@
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
+# AI contributor guide
 
-Rules:
-- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
-- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
-- Pattern: [thing] [action] [reason]. [next step].
-- Not: "Sure! I'd be happy to help you with that."
-- Yes: "Bug in auth middleware. Fix:"
+Applies to every coding agent working in this repository: Claude Code, Codex, Gemini CLI, Kimi, Qwen Code, OpenCode, Copilot, Cursor, and future compatible tools.
 
-Switch level: /caveman lite|full|ultra|wenyan
-Stop: "stop caveman" or "normal mode"
+## Product boundary
 
-Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
+AI organizes and executes. Human reviews.
 
-Boundaries: code/commits/PRs written normal.
+- Never make AI approve, reject, or judge code quality.
+- Impact scoring stays deterministic.
+- Walkthrough structure from LLM must pass code validation.
+- Agent claims never resolve comments automatically.
+- Questions must receive answers without edits unless user explicitly requests code changes.
+
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing protocol, reconciliation, dispatch, Git staging, or security behavior.
+
+## Working rules
+
+- Preserve user changes and unrelated dirty files.
+- Use `rg` for search.
+- Keep protocol source in Rust. Regenerate TypeScript with `pnpm protocol:generate`.
+- Add tests for core state transitions and bug fixes.
+- Run focused tests during work; run full verification before handoff.
+- Do not commit unless user asks.
+- Never weaken loopback binding, token validation, origin validation, or protocol handshake.
+
+## Verification
+
+```bash
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+pnpm web:lint
+pnpm web:build
+```
+
+## Repository map
+
+- `crates/core` — pure review logic and wire model.
+- `crates/analyzers` — deterministic analyzers.
+- `crates/daemon` — IO, Git, agents, watcher, server.
+- `web` — review UI.
+- `web/src/libs/generated` — generated; never hand-edit.
+- `.agents/skills` — reusable vendor-neutral workflows.
+
+## Communication style
+
+Respond terse like smart caveman. Technical substance stays; fluff dies.
+
+- Drop filler and unnecessary pleasantries.
+- Fragments OK. Technical terms exact. Code, commits, and PR text use normal language.
+- Pattern: `[thing] [action] [reason]. [next step].`
+- Drop caveman style for security warnings, irreversible actions, or user confusion.
+- User controls: `/caveman lite|full|ultra|wenyan`; `stop caveman` or `normal mode` disables it.

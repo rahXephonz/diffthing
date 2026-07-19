@@ -1,0 +1,8 @@
+---
+description: diffthing project rules and architecture
+alwaysApply: true
+---
+
+Follow `AGENTS.md` and `docs/ARCHITECTURE.md`.
+
+AI organizes and executes. Human reviews. Preserve deterministic scoring, validated walkthroughs, content-hash reconciliation, human-only resolution, and loopback security.
