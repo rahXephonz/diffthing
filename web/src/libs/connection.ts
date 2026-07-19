@@ -51,7 +51,14 @@ export function connect(
   }
 
   onState({ kind: "connecting" });
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+  // The daemon serves this page, so the WS and /health share its origin. Over
+  // https (local.diffthing.dev) that's wss same-origin; over the plain-http
+  // offline build it's ws on 127.0.0.1. Deriving from location keeps both
+  // paths mixed-content-free without hardcoding a scheme.
+  const secure = location.protocol === "https:";
+  const wsOrigin = `${secure ? "wss" : "ws"}://${location.host}`;
+  const httpOrigin = `${location.protocol}//${location.host}`;
+  const ws = new WebSocket(`${wsOrigin}/ws`);
   let settled = false;
 
   const timeout = setTimeout(async () => {
@@ -63,7 +70,7 @@ export function connect(
     // problem (Brave shields, Chrome PNA, Safari). If both fail, the
     // daemon is down or the port is wrong.
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      const res = await fetch(`${httpOrigin}/health`, {
         signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {

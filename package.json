@@ -14,7 +14,8 @@
     "daemon:fmt:check": "cargo fmt --all -- --check",
     "daemon:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "changeset": "changeset",
-    "changeset:version": "changeset version"
+    "changeset:version": "changeset version",
+    "cert:issue": "bash scripts/issue-cert.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",

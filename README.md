@@ -20,9 +20,48 @@ Agent-generated changes are fast, wide, and difficult to review as one flat patc
 
 ## Status
 
-Early development. Run from source. npm distribution is planned but not published yet.
+Early development. Install via npm or run from source.
 
-## Quick start
+## Install
+
+Run inside any Git repository:
+
+```bash
+npx diffthing
+```
+
+```text
+  diffthing 0.1.0
+  reviewing /path/to/project against HEAD
+  llm       claude (your login)
+  ✓ ready   0 files, 0 changes, 1 AI-organized scopes
+
+  open  https://local.diffthing.dev:58826/#port=58826&token=…
+```
+
+Open the printed URL. Or install globally:
+
+```bash
+npm install -g diffthing
+diffthing
+```
+
+The npm build ships a prebuilt binary with the review UI and a certificate for
+`local.diffthing.dev` embedded. It serves the UI over **HTTPS via
+`local.diffthing.dev`**, a domain whose public DNS resolves to `127.0.0.1` — so
+the page loads from your own machine over a browser-trusted origin, and the
+WebSocket is same-origin (no mixed content, no Local Network Access prompt).
+Nothing to install or trust — it just works. See
+[How local.diffthing.dev works](docs/LOCAL_DOMAIN.md).
+
+If DNS or the certificate can't be reached (locked-down networks, air-gapped),
+fall back to plain HTTP on loopback:
+
+```bash
+npx diffthing --offline
+```
+
+## Quick start (from source)
 
 Requirements:
 
@@ -93,7 +132,8 @@ agent = "codex"
 diffthing [OPTIONS]
 
 --base <BASE>  Diff base; default HEAD
---offline      Serve embedded UI from loopback daemon
+--offline      Serve over plain HTTP on 127.0.0.1 instead of HTTPS via
+               local.diffthing.dev
 --port <PORT>  Fixed port; default first free port
 --repo <REPO>  Repository root; default current directory
 --llm <LLM>    claude | codex | gemini | kimi | qwen | opencode | none | auto
@@ -129,11 +169,16 @@ Detailed invariants: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Security model
 
-- Daemon binds only to `127.0.0.1`.
+- Daemon binds only to `127.0.0.1`, in both HTTPS and `--offline` modes.
 - Session token stays in URL fragment, not query string or server logs.
 - WebSocket handshake validates token, origin, and protocol version.
 - Source leaves machine only through agent CLI selected by user.
 - Agent edits are reconciled into same review pipeline as manual edits.
+- `local.diffthing.dev` resolves only to loopback. Its bundled TLS private key
+  is therefore **not secret** — it can only serve HTTPS on a user's own
+  `127.0.0.1`, never authenticate a remote host (the same tradeoff Drizzle
+  Studio makes). The session token and loopback bind remain the real access
+  controls. Details: [docs/LOCAL_DOMAIN.md](docs/LOCAL_DOMAIN.md).
 
 ## Development
 

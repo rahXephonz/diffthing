@@ -11,18 +11,28 @@ mod gitio;
 mod llm;
 mod server;
 mod session;
+mod tls;
 mod watcher;
 
 use clap::Parser;
 use rand::Rng;
+use server::ServeMode;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{io::IsTerminal, io::Write};
 use tokio::sync::oneshot;
 
-pub const HOSTED_ORIGIN: &str = "https://local.diffthing.dev";
+/// Public DNS points this domain at `127.0.0.1`, so an HTTPS page served here
+/// by the local daemon has a browser-trusted origin that reaches loopback.
+pub const HOSTED_DOMAIN: &str = "local.diffthing.dev";
 pub const DAEMON_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Origin the SPA is served from in hosted-TLS mode. Includes the port because
+/// the daemon binds an ephemeral one and browser origins are host:port scoped.
+pub fn hosted_origin(port: u16) -> String {
+    format!("https://{HOSTED_DOMAIN}:{port}")
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "diffthing", about = "AI organizes the diff. Only you review.")]
@@ -30,7 +40,8 @@ struct Cli {
     /// Diff base. Default: working tree vs HEAD (uncommitted agent output).
     #[arg(long, default_value = "HEAD")]
     base: String,
-    /// Serve the embedded SPA from 127.0.0.1 instead of the hosted origin.
+    /// Serve over plain HTTP on 127.0.0.1 instead of HTTPS via
+    /// local.diffthing.dev. Use when DNS or the cert can't be reached.
     #[arg(long)]
     offline: bool,
     /// Fixed port (default: first free port).
@@ -105,6 +116,11 @@ impl TerminalSpinner {
 #[tokio::main]
 async fn main() -> anyhow_lite::Result<()> {
     let cli = Cli::parse();
+
+    // rustls is pinned to the ring provider (no default installed). Do this
+    // before any TLS use; harmless in offline mode.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let repo = cli.repo.unwrap_or_else(|| std::env::current_dir().expect("cwd"));
 
     if !gitio::is_git_repo(&repo) {
@@ -127,10 +143,11 @@ async fn main() -> anyhow_lite::Result<()> {
     // Watcher feeds the session's reconciliation loop.
     watcher::spawn(repo.clone(), Arc::clone(&session));
 
-    let url = if cli.offline {
-        format!("http://127.0.0.1:{port}/#port={port}&token={token}")
+    let hosted = !cli.offline;
+    let url = if hosted {
+        format!("{}/#port={port}&token={token}", hosted_origin(port))
     } else {
-        format!("{HOSTED_ORIGIN}/#port={port}&token={token}")
+        format!("http://127.0.0.1:{port}/#port={port}&token={token}")
     };
     println!();
     println!("  diffthing {DAEMON_VERSION}");
@@ -147,11 +164,18 @@ async fn main() -> anyhow_lite::Result<()> {
             "  {ready}   {file_count} files, {hunk_count} changes, {scope_count} AI-organized scopes"
         );
     }
+    let mode = if hosted {
+        let (cert_pem, key_pem) = tls::material()?;
+        ServeMode::HostedTls { cert_pem, key_pem }
+    } else {
+        ServeMode::OfflineHttp
+    };
+
     println!();
     println!("  open  {url}");
     println!();
 
-    server::serve(port, session, cli.offline).await
+    server::serve(port, session, mode).await
 }
 
 /// Tiny local Result alias to avoid pulling anyhow for the scaffold.

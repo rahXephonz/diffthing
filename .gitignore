@@ -8,3 +8,6 @@ dist/
 
 .DS_Store
 .claude/settings.local.json
+
+# CI-generated per-platform npm packages (built by release-npm workflow)
+npm/diffthing-*/

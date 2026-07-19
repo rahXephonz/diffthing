@@ -8,17 +8,28 @@
 //! This is the defense against a malicious tab dialing the daemon.
 
 use crate::session::Session;
-use crate::{DAEMON_VERSION, HOSTED_ORIGIN};
+use crate::{hosted_origin, DAEMON_VERSION};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
+use axum_server::tls_rustls::RustlsConfig;
 use diffthing_core::protocol::{ClientMsg, ErrorCode, ServerMsg, PROTOCOL_VERSION};
 use rust_embed::RustEmbed;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+/// How the daemon exposes the review UI.
+pub enum ServeMode {
+    /// Default: HTTPS on `127.0.0.1`, reached via `local.diffthing.dev` which
+    /// resolves to loopback. SPA + WS are same-origin over TLS. Carries the
+    /// PEM cert chain + key to serve.
+    HostedTls { cert_pem: Vec<u8>, key_pem: Vec<u8> },
+    /// `--offline`: plain HTTP on `127.0.0.1`. No DNS or cert dependency.
+    OfflineHttp,
+}
 
 /// Built by `pnpm --filter diffthing-web build` — must exist at compile
 /// time. `--offline` serves this off the daemon's own port so the page and
@@ -37,20 +48,28 @@ struct AppState {
 pub async fn serve(
     port: u16,
     session: Arc<Session>,
-    offline: bool,
+    mode: ServeMode,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut app = Router::new()
+    // The daemon serves the SPA itself in both modes, so the page and its WS
+    // target always share one origin — the browser never sees a cross-origin
+    // or mixed-content request.
+    let app = Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
-        .with_state(AppState { session, port });
-
-    if offline {
-        app = app.fallback(get(serve_asset));
-    }
+        .with_state(AppState { session, port })
+        .fallback(get(serve_asset));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    match mode {
+        ServeMode::HostedTls { cert_pem, key_pem } => {
+            let config = RustlsConfig::from_pem(cert_pem, key_pem).await?;
+            axum_server::bind_rustls(addr, config).serve(app.into_make_service()).await?;
+        }
+        ServeMode::OfflineHttp => {
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            axum::serve(listener, app).await?;
+        }
+    }
     Ok(())
 }
 
@@ -77,7 +96,9 @@ async fn health(State(state): State<AppState>, headers: HeaderMap) -> impl IntoR
 }
 
 fn origin_allowed(origin: &str, port: u16) -> bool {
-    if origin == HOSTED_ORIGIN
+    // Hosted TLS: the SPA is served from https://local.diffthing.dev:PORT
+    // (same daemon, same port). Offline: plain-http loopback.
+    if origin == hosted_origin(port)
         || origin == format!("http://127.0.0.1:{port}")
         || origin == format!("http://localhost:{port}")
     {

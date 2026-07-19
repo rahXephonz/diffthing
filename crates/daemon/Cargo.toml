@@ -16,6 +16,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio = { version = "1.36", features = ["rt-multi-thread", "macros", "sync", "time", "process", "signal"] }
 axum = { version = "0.7", features = ["ws"] }
+# TLS for the local.diffthing.dev flow. Pin rustls to the `ring` provider
+# (not the default aws-lc-rs) so release cross-compiles need no C toolchain.
+axum-server = { version = "0.7", default-features = false, features = ["tls-rustls-no-provider"] }
+# rustls pinned to the ring provider (not aws-lc-rs) so release cross-compiles
+# need no C toolchain.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 clap = { version = "=4.4.18", features = ["derive"] }
 notify = "6.1"
 ignore = "=0.4.22"

@@ -1,0 +1,155 @@
+name: Release npm
+
+# Publish the `diffthing` launcher plus per-platform binary packages to npm.
+# Trigger by pushing a tag like `v0.1.0`. The tag (minus the leading `v`) is
+# the published version for every package.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            cross: false
+          - target: x86_64-apple-darwin
+            runner: macos-14
+            cross: false
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            cross: true
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Platform-independent, but must exist before cargo build embeds it.
+      - name: Build web UI
+        run: pnpm web:build
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build binary (cross)
+        if: matrix.cross
+        run: cross build -p diffthing --release --target ${{ matrix.target }}
+
+      - name: Build binary (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build -p diffthing --release --target ${{ matrix.target }}
+
+      - name: Resolve version from tag
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Package platform npm package
+        shell: bash
+        run: |
+          BIN="target/${{ matrix.target }}/release/diffthing"
+          [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ] && BIN="${BIN}.exe"
+          node scripts/build-npm-platform.mjs \
+            --target "${{ matrix.target }}" \
+            --binary "$BIN" \
+            --version "${{ steps.ver.outputs.version }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.target }}
+          path: npm/diffthing-*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Download platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: npm-*
+          path: npm
+          merge-multiple: true
+
+      - name: Resolve version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync launcher version
+        working-directory: npm/diffthing
+        run: |
+          npm version "${{ steps.ver.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm pkg set "optionalDependencies.diffthing-darwin-arm64=${{ steps.ver.outputs.version }}"
+          npm pkg set "optionalDependencies.diffthing-darwin-x64=${{ steps.ver.outputs.version }}"
+          npm pkg set "optionalDependencies.diffthing-linux-x64=${{ steps.ver.outputs.version }}"
+          npm pkg set "optionalDependencies.diffthing-linux-arm64=${{ steps.ver.outputs.version }}"
+          npm pkg set "optionalDependencies.diffthing-win32-x64=${{ steps.ver.outputs.version }}"
+
+      # Platform packages first so the launcher's optional deps resolve on npm.
+      - name: Publish platform packages
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in diffthing-*/; do
+            echo "Publishing $dir"
+            npm publish "$dir" --provenance --access public
+          done
+
+      - name: Publish launcher
+        working-directory: npm/diffthing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
