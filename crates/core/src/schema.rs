@@ -12,7 +12,7 @@ pub const WALKTHROUGH_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum Impact {
     Low,
     Medium,
@@ -23,7 +23,7 @@ pub enum Impact {
 /// Deterministic score attached to every hunk. `reasons` is user-facing:
 /// "highest — exported signature changed, 23 importers, payment path".
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct ImpactScore {
     pub impact: Impact,
     pub points: u32,
@@ -33,7 +33,7 @@ pub struct ImpactScore {
 /// A step: the atomic reading unit. References hunks by id — never contains
 /// diff content itself (single source of truth is the hunk store).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Step {
     pub id: String,
     pub title: String,
@@ -43,7 +43,7 @@ pub struct Step {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Scope {
     pub id: String,
     pub title: String,
@@ -51,10 +51,11 @@ pub struct Scope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Walkthrough {
     pub schema_version: u16,
     /// Monotonic version within a session; bumped by every applied update.
+    #[cfg_attr(feature = "ts-export", ts(type = "number"))]
     pub revision: u64,
     /// Working-tree state this was generated against (git rev + dirty hash).
     pub tree_state: String,

@@ -11,7 +11,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum HunkStatus {
     Unviewed,
     Viewed,
@@ -24,10 +24,12 @@ pub enum HunkStatus {
 /// is good. Judgment is the human's, always (CLAUDE.md, the one rule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum FlagEntryKind {
     /// A person typed this.
     HumanComment,
+    /// Agent answered or explained without changing the working tree.
+    AgentResponse,
     /// An agent's summary of what it changed — a CLAIM, not a verdict and
     /// not trusted on its word. Reconciliation independently confirms the
     /// hunk actually moved; the human still closes the flag.
@@ -37,16 +39,17 @@ pub enum FlagEntryKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct FlagEntry {
     pub kind: FlagEntryKind,
     pub body: String,
     /// Walkthrough revision this entry was recorded against.
+    #[cfg_attr(feature = "ts-export", ts(type = "number"))]
     pub revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Flag {
     pub hunk: HunkId,
     /// Line this thread anchors to — an index into the hunk's raw lines
@@ -96,7 +99,7 @@ impl Flag {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct ReviewState {
     pub status: BTreeMap<HunkId, HunkStatus>,
     pub flags: Vec<Flag>,

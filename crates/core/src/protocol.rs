@@ -13,11 +13,11 @@ use std::collections::BTreeMap;
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 
-pub const PROTOCOL_VERSION: u16 = 4;
+pub const PROTOCOL_VERSION: u16 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum ClientMsg {
     /// Must be the first message. Token echoes the URL fragment value.
     Hello {
@@ -52,6 +52,7 @@ pub enum ClientMsg {
         runner: String,
     },
     ApplyUpdate {
+        #[cfg_attr(feature = "ts-export", ts(type = "number"))]
         to_revision: u64,
     },
     Regenerate,
@@ -60,7 +61,7 @@ pub enum ClientMsg {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum ServerMsg {
     HelloAck {
         protocol: u16,
@@ -79,6 +80,7 @@ pub enum ServerMsg {
     /// Background reconciliation result — UI shows the apply banner,
     /// never reflows on its own.
     UpdateAvailable {
+        #[cfg_attr(feature = "ts-export", ts(type = "number"))]
         revision: u64,
         report: ReconcileReport,
     },
@@ -111,7 +113,7 @@ pub enum ServerMsg {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum JobStatus {
     Running,
     Done,
@@ -123,7 +125,7 @@ pub enum JobStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum ErrorCode {
     BadToken,
     ProtocolMismatch,

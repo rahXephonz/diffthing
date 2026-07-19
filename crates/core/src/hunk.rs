@@ -12,11 +12,11 @@ use ts_rs::TS;
 
 /// Stable content-derived hunk identity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct HunkId(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Hunk {
     pub id: HunkId,
     pub path: String,
@@ -30,7 +30,7 @@ pub struct Hunk {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct FileDiff {
     pub path: String,
     pub old_path: Option<String>,
@@ -40,7 +40,7 @@ pub struct FileDiff {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub enum FileStatus {
     Added,
     Modified,

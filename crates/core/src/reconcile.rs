@@ -18,14 +18,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct Lineage {
     pub from: HunkId,
     pub to: HunkId,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts-export", derive(TS), ts(export))]
+#[cfg_attr(feature = "ts-export", derive(TS))]
 pub struct ReconcileReport {
     pub carried: Vec<HunkId>,
     pub changed: Vec<Lineage>,
