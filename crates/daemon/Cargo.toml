@@ -23,6 +23,7 @@ rand = "0.8"
 rust-embed = { version = "8", features = ["debug-embed", "interpolate-folder-path"] }
 mime_guess = "2"
 
+toml = "0.8"
+
 # NEXT (see CLAUDE.md):
 # rusqlite = { version = "0.31", features = ["bundled"] }   # M1: .diffthing/ persistence
-# reqwest  = { version = "0.12", features = ["json"] }      # M1: real LLM providers

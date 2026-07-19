@@ -100,7 +100,15 @@ async fn serve_asset(uri: Uri) -> impl IntoResponse {
     let path = uri.path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
 
-    match WebAssets::get(path).or_else(|| WebAssets::get("index.html")) {
+    // SPA fallback belongs only to navigation routes. Returning index.html
+    // for a missing JS/CSS asset makes browsers parse HTML as JavaScript and
+    // hides the real problem behind `Unexpected token '<'`.
+    let file = WebAssets::get(path).or_else(|| {
+        (!path.contains('.') && !path.starts_with("assets/"))
+            .then(|| WebAssets::get("index.html"))
+            .flatten()
+    });
+    match file {
         Some(file) => {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
             ([(axum::http::header::CONTENT_TYPE, mime.as_ref().to_string())], file.data)
@@ -124,6 +132,14 @@ async fn ws_upgrade(
         return axum::http::StatusCode::FORBIDDEN.into_response();
     }
     ws.on_upgrade(move |socket| handle_ws(socket, state.session)).into_response()
+}
+
+/// Push the current review state to every connected tab. Called after any
+/// mutation that changes review state without moving the diff, so a comment
+/// or viewed-mark shows instantly instead of waiting for a reconnect.
+async fn broadcast_review(session: &Session) {
+    let review = session.state.lock().await.review.clone();
+    let _ = session.events.send(ServerMsg::ReviewUpdated { review });
 }
 
 async fn send(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
@@ -171,7 +187,11 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
 
     if !send(
         &mut socket,
-        &ServerMsg::HelloAck { protocol: PROTOCOL_VERSION, daemon_version: DAEMON_VERSION.into() },
+        &ServerMsg::HelloAck {
+            protocol: PROTOCOL_VERSION,
+            daemon_version: DAEMON_VERSION.into(),
+            llm: session.llm_label(),
+        },
     )
     .await
     {
@@ -207,21 +227,42 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                 let Ok(msg) = serde_json::from_str::<ClientMsg>(&t) else { continue };
                 match msg {
                     ClientMsg::MarkViewed { hunk } => {
-                        session.state.lock().await.review.mark_viewed(hunk);
+                        session.mark_viewed(hunk).await;
+                        broadcast_review(&session).await;
                     }
-                    ClientMsg::AddFlag { hunk, comment } => {
-                        session.state.lock().await.review.flags.push(
-                            diffthing_core::review::Flag {
-                                hunk, comment, open: true, addressed_claim: false,
-                            },
-                        );
-                    }
-                    ClientMsg::CloseFlag { hunk } => {
-                        // Closing a flag is a human click — the only path.
-                        let mut st = session.state.lock().await;
-                        for f in st.review.flags.iter_mut() {
-                            if f.hunk == hunk { f.open = false; }
+                    ClientMsg::AddFlag { hunk, line, comment } => {
+                        // Thread semantics: a comment on a (hunk, line) that
+                        // already has an open thread is a REPLY (appended);
+                        // otherwise it opens a new one. One open thread per
+                        // anchor point, GitHub-style.
+                        use diffthing_core::review::{Flag, FlagEntryKind};
+                        {
+                            let mut st = session.state.lock().await;
+                            let rev = st.walkthrough.revision;
+                            match st
+                                .review
+                                .flags
+                                .iter_mut()
+                                .find(|f| f.hunk == hunk && f.line == line && f.open)
+                            {
+                                Some(f) => f.push(FlagEntryKind::HumanComment, comment, rev),
+                                None => st.review.flags.push(Flag::new(hunk, line, comment)),
+                            }
                         }
+                        broadcast_review(&session).await;
+                    }
+                    ClientMsg::CloseFlag { hunk, line } => {
+                        // Closing a flag is a human click — the only path.
+                        {
+                            let mut st = session.state.lock().await;
+                            for f in st.review.flags.iter_mut() {
+                                if f.hunk == hunk && f.line == line { f.open = false; }
+                            }
+                        }
+                        // Last open flag may have been the only reason a
+                        // fully viewed file could not enter staged changes.
+                        session.stage_if_approved(&hunk).await;
+                        broadcast_review(&session).await;
                     }
                     ClientMsg::ApplyUpdate { to_revision } => {
                         if session.apply_update(to_revision).await {
@@ -234,6 +275,10 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                             };
                             drop(state);
                             if !send(&mut socket, &snap).await { return; }
+                            // Preserve established scope order, but replace
+                            // orphan placeholder framing with validated AI
+                            // organization in the background.
+                            session.spawn_new_changes_upgrade();
                         }
                     }
                     ClientMsg::ExportReview => {
@@ -242,16 +287,17 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                             return;
                         }
                     }
-                    ClientMsg::RequestChange { .. } => {
-                        // M2: snapshot -> single-writer lock -> spawn runner
-                        // (headless agent) -> scope validation. See CLAUDE.md.
-                        let _ = send(&mut socket, &ServerMsg::Error {
-                            code: ErrorCode::Internal,
-                            message: "agent dispatch lands in M2".into(),
-                        }).await;
+                    ClientMsg::RequestChange { hunks, line, instruction, runner } => {
+                        // Anchored dispatch (inv 9): always attached to hunks.
+                        // The task snapshots, single-writer-locks, runs the
+                        // agent, scope-checks, and announces status over the
+                        // broadcast channel. Results re-enter via the watcher.
+                        crate::dispatch::spawn(
+                            Arc::clone(&session), hunks, line, instruction, runner,
+                        );
                     }
                     ClientMsg::Regenerate => {
-                        // M1: full regeneration via gated LLM pipeline.
+                        session.spawn_walkthrough_upgrade();
                     }
                     ClientMsg::Hello { .. } => {} // already handshaken
                 }

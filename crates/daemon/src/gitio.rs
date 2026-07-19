@@ -4,6 +4,7 @@
 //! unit-tested there.
 
 use diffthing_core::hunk::{parse_unified_diff, FileDiff};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -59,7 +60,41 @@ async fn diff_text_with_temp_index(
 
 pub async fn diff_against(root: &Path, base: &str) -> std::io::Result<Vec<FileDiff>> {
     let text = diff_text(root, base).await?;
-    Ok(parse_unified_diff(&text))
+    let staged = staged_only_paths(root).await?;
+    Ok(parse_unified_diff(&text).into_iter().filter(|file| !staged.contains(&file.path)).collect())
+}
+
+/// Stage one human-approved file. `--` prevents path-like filenames from
+/// being parsed as options. Git index becomes approval ledger: fully staged
+/// files leave active review, while later working-tree edits reappear.
+pub async fn stage_path(root: &Path, path: &str) -> std::io::Result<()> {
+    let out = Command::new("git").current_dir(root).args(["add", "--", path]).output().await?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(String::from_utf8_lossy(&out.stderr).into_owned()))
+    }
+}
+
+/// Paths changed in index but clean in working tree. These are approved and
+/// excluded from active review. A later edit sets worktree status too, making
+/// path visible again despite its staged baseline.
+async fn staged_only_paths(root: &Path) -> std::io::Result<BTreeSet<String>> {
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain", "--no-renames", "-z"])
+        .output()
+        .await?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text
+        .split('\0')
+        .filter(|record| record.len() > 3)
+        .filter(|record| {
+            let status = record.as_bytes();
+            status[0] != b' ' && status[1] == b' '
+        })
+        .map(|record| record[3..].to_string())
+        .collect())
 }
 
 /// Tree state fingerprint: HEAD rev + short hash of the diff itself, so the
@@ -80,8 +115,6 @@ pub async fn tree_state(root: &Path, base: &str) -> std::io::Result<String> {
 
 /// Snapshot before agent dispatch — powers one-click revert.
 /// `git stash create` returns a commit ref WITHOUT touching the tree.
-/// Unused until M2 wires up agent dispatch (see CLAUDE.md).
-#[allow(dead_code)]
 pub async fn snapshot(root: &Path) -> std::io::Result<Option<String>> {
     let out = Command::new("git")
         .current_dir(root)
@@ -90,4 +123,33 @@ pub async fn snapshot(root: &Path) -> std::io::Result<Option<String>> {
         .await?;
     let r = String::from_utf8_lossy(&out.stdout).trim().to_string();
     Ok(if r.is_empty() { None } else { Some(r) })
+}
+
+/// Restore TRACKED files to a snapshot ref (from `snapshot`). Deliberately
+/// non-destructive: it overwrites tracked paths back to the snapshot but
+/// never runs `git clean`, so untracked user files are never nuked. Files
+/// the agent newly CREATED survive and surface through reconcile — honest,
+/// and no silent data loss (CLAUDE.md: destructive git ops stay opt-in).
+pub async fn restore_tracked(root: &Path, snapshot_ref: &str) -> std::io::Result<()> {
+    Command::new("git")
+        .current_dir(root)
+        .args(["checkout", snapshot_ref, "--", "."])
+        .output()
+        .await?;
+    Ok(())
+}
+
+/// Paths currently modified/added/untracked, per `git status --porcelain`.
+/// Used to bound an agent's blast radius: files it touches that weren't in
+/// scope and weren't already dirty are surfaced as a scope violation.
+pub async fn modified_paths(root: &Path) -> std::io::Result<Vec<String>> {
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain", "--no-renames", "-z"])
+        .output()
+        .await?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    // -z: NUL-separated records, each "XY <path>". Rename disabled so a
+    // record is always a single path (no " -> " to split).
+    Ok(text.split('\0').filter(|r| r.len() > 3).map(|r| r[3..].to_string()).collect())
 }

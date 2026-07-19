@@ -5,6 +5,8 @@
 //!   4. start watcher (debounce-to-quiescence) + axum server (WS, token+origin gated)
 //!   5. print the URL — token in the FRAGMENT, never the query string
 
+mod config;
+mod dispatch;
 mod gitio;
 mod llm;
 mod server;
@@ -16,6 +18,8 @@ use rand::Rng;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{io::IsTerminal, io::Write};
+use tokio::sync::oneshot;
 
 pub const HOSTED_ORIGIN: &str = "https://local.diffthing.dev";
 pub const DAEMON_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -35,6 +39,11 @@ struct Cli {
     /// Repo root (default: cwd).
     #[arg(long)]
     repo: Option<PathBuf>,
+    /// Agent CLI for walkthrough generation: claude | codex | gemini | kimi |
+    /// qwen | opencode | none.
+    /// Default auto: config.toml [llm] agent, else first installed on PATH.
+    #[arg(long, default_value = "auto")]
+    llm: String,
 }
 
 fn free_port() -> u16 {
@@ -50,6 +59,49 @@ fn gen_token() -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+struct TerminalSpinner {
+    stop: Option<oneshot::Sender<()>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl TerminalSpinner {
+    fn start(message: String) -> Self {
+        let (stop, mut stopped) = oneshot::channel();
+        let interactive = std::io::stderr().is_terminal();
+        if !interactive {
+            eprintln!("  {message}...");
+        }
+        let task = tokio::spawn(async move {
+            if !interactive {
+                let _ = stopped.await;
+                return;
+            }
+            let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let mut frame = 0;
+            loop {
+                eprint!("\r  \x1b[36m{}\x1b[0m {message}", frames[frame]);
+                let _ = std::io::stderr().flush();
+                tokio::select! {
+                    _ = &mut stopped => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
+                        frame = (frame + 1) % frames.len();
+                    }
+                }
+            }
+            eprint!("\r\x1b[2K");
+            let _ = std::io::stderr().flush();
+        });
+        Self { stop: Some(stop), task }
+    }
+
+    async fn finish(mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        let _ = self.task.await;
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow_lite::Result<()> {
     let cli = Cli::parse();
@@ -63,7 +115,14 @@ async fn main() -> anyhow_lite::Result<()> {
     let port = cli.port.unwrap_or_else(free_port);
     let token = gen_token();
 
-    let session = Arc::new(session::Session::boot(&repo, &cli.base, token.clone()).await?);
+    let llm_client = llm::AnyLlm::from_choice(config::resolve_agent(&cli.llm));
+    let llm_desc = llm_client.describe();
+
+    let spinner = TerminalSpinner::start(format!("scanning changes and organizing via {llm_desc}"));
+    let session =
+        Arc::new(session::Session::boot(&repo, &cli.base, token.clone(), llm_client).await?);
+    spinner.finish().await;
+    let (file_count, hunk_count, scope_count, degraded) = session.startup_counts().await;
 
     // Watcher feeds the session's reconciliation loop.
     watcher::spawn(repo.clone(), Arc::clone(&session));
@@ -76,6 +135,18 @@ async fn main() -> anyhow_lite::Result<()> {
     println!();
     println!("  diffthing {DAEMON_VERSION}");
     println!("  reviewing {} against {}", repo.display(), cli.base);
+    println!("  llm       {llm_desc}");
+    let ready =
+        if std::io::stdout().is_terminal() { "\x1b[32m✓ ready\x1b[0m" } else { "✓ ready" };
+    if degraded {
+        println!(
+            "  {ready}   {file_count} files, {hunk_count} changes, {scope_count} scopes (deterministic fallback)"
+        );
+    } else {
+        println!(
+            "  {ready}   {file_count} files, {hunk_count} changes, {scope_count} AI-organized scopes"
+        );
+    }
     println!();
     println!("  open  {url}");
     println!();
