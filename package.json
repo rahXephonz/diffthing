@@ -8,6 +8,7 @@
     "web:format": "pnpm --filter diffthing-web format",
     "daemon:test": "cargo test --workspace",
     "daemon:run": "cargo run -p diffthing",
+    "start": "pnpm web:build && cargo run -p diffthing -- --offline",
     "daemon:fmt": "cargo fmt --all",
     "daemon:fmt:check": "cargo fmt --all -- --check",
     "daemon:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
