@@ -23,7 +23,7 @@ const TARGETS = {
   "x86_64-apple-darwin": { pkg: "diffthing-darwin-x64", os: "darwin", cpu: "x64", bin: "diffthing" },
   "x86_64-unknown-linux-gnu": { pkg: "diffthing-linux-x64", os: "linux", cpu: "x64", bin: "diffthing" },
   "aarch64-unknown-linux-gnu": { pkg: "diffthing-linux-arm64", os: "linux", cpu: "arm64", bin: "diffthing" },
-  "x86_64-pc-windows-msvc": { pkg: "diffthing-win32-x64", os: "win32", cpu: "x64", bin: "diffthing.exe" },
+  "x86_64-pc-windows-msvc": { pkg: "diffthing-windows-x64", os: "win32", cpu: "x64", bin: "diffthing.exe" },
 };
 
 function arg(name) {

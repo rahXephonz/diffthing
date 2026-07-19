@@ -33,6 +33,6 @@
     "diffthing-darwin-x64": "0.1.0",
     "diffthing-linux-x64": "0.1.0",
     "diffthing-linux-arm64": "0.1.0",
-    "diffthing-win32-x64": "0.1.0"
+    "diffthing-windows-x64": "0.1.0"
   }
 }

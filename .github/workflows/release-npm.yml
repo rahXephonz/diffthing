@@ -135,7 +135,7 @@ jobs:
           npm pkg set "optionalDependencies.diffthing-darwin-x64=${{ steps.ver.outputs.version }}"
           npm pkg set "optionalDependencies.diffthing-linux-x64=${{ steps.ver.outputs.version }}"
           npm pkg set "optionalDependencies.diffthing-linux-arm64=${{ steps.ver.outputs.version }}"
-          npm pkg set "optionalDependencies.diffthing-win32-x64=${{ steps.ver.outputs.version }}"
+          npm pkg set "optionalDependencies.diffthing-windows-x64=${{ steps.ver.outputs.version }}"
 
       # Platform packages first so the launcher's optional deps resolve on npm.
       # Idempotent: skip any name@version already on the registry, so re-runs

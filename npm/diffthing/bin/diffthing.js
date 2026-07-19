@@ -14,7 +14,7 @@ const TARGETS = {
   "darwin-x64": { pkg: "diffthing-darwin-x64", bin: "diffthing" },
   "linux-x64": { pkg: "diffthing-linux-x64", bin: "diffthing" },
   "linux-arm64": { pkg: "diffthing-linux-arm64", bin: "diffthing" },
-  "win32-x64": { pkg: "diffthing-win32-x64", bin: "diffthing.exe" },
+  "win32-x64": { pkg: "diffthing-windows-x64", bin: "diffthing.exe" },
 };
 
 function resolveBinary() {
