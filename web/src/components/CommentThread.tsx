@@ -19,6 +19,7 @@ type Author = { label: string; initials: string; cls: string };
 
 const AUTHOR: Record<FlagEntry["kind"], Author> = {
   human_comment: { label: "You", initials: "Y", cls: "bg-accent/20 text-accent" },
+  agent_response: { label: "Agent", initials: "AI", cls: "bg-accent/20 text-accent" },
   agent_claim: { label: "Agent", initials: "AI", cls: "bg-green/20 text-green" },
   dispatch_note: { label: "diffthing", initials: "!", cls: "bg-warn/20 text-warn" },
 };
@@ -39,6 +40,7 @@ function Avatar({ kind }: { kind: FlagEntry["kind"] }) {
 
 function Comment({ entry }: { entry: FlagEntry }) {
   const a = AUTHOR[entry.kind];
+
   return (
     <div className="border-border first:border-t-0">
       <div className="flex items-center gap-2 px-3 py-1.5">
@@ -139,6 +141,7 @@ function MarkdownPreview({ source }: { source: string }) {
     const task = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.+)$/);
     const bullet = line.match(/^\s*[-*]\s+(.+)$/);
     const ordered = line.match(/^\s*(\d+)\.\s+(.+)$/);
+
     if (heading)
       blocks.push(
         <div
@@ -188,7 +191,7 @@ function MarkdownPreview({ source }: { source: string }) {
         <code>{code.join("\n")}</code>
       </pre>,
     );
-  return <div className="text-sm leading-relaxed break-words">{blocks}</div>;
+  return <div className="text-sm leading-relaxed wrap-break-word">{blocks}</div>;
 }
 
 function Composer({
@@ -387,12 +390,16 @@ export default function CommentThread({
                 />
                 <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border">
                   <button
-                    className="text-xs bg-transparent border border-border rounded-md px-2.5 py-1 cursor-pointer text-text hover:border-accent disabled:opacity-40"
+                    className={clsx(
+                      running ? "cursor-default" : "cursor-pointer",
+                      "text-xs bg-transparent border border-border rounded-md px-2.5 py-1 text-text hover:border-accent disabled:opacity-40",
+                    )}
                     disabled={running}
+                    aria-disabled={running}
                     onClick={() => onDispatch(instruction ?? "")}
-                    title="Dispatch to your agent — it edits the code, then reports what it changed"
+                    title="Ask your agent; it edits only when your comment explicitly requests a change"
                   >
-                    {running ? "agent busy…" : "Fix with agent"}
+                    {running ? "Agent busy…" : "Ask agent"}
                   </button>
                   <button
                     className="text-xs bg-transparent border border-border rounded-md px-2.5 py-1 cursor-pointer text-muted hover:border-green hover:text-green"

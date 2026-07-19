@@ -80,11 +80,33 @@ fn extract_summary(stdout: &str) -> String {
         .unwrap_or_else(|| "agent finished; changes pending your review".into())
 }
 
+fn extract_response(stdout: &str) -> String {
+    if let Some(s) = stdout
+        .lines()
+        .rev()
+        .find_map(|l| l.trim().strip_prefix("RESPONSE:").map(|s| s.trim().to_string()))
+    {
+        if !s.is_empty() {
+            return s;
+        }
+    }
+    stdout
+        .lines()
+        .rev()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "agent returned no response".into())
+}
+
 fn build_prompt(flagged: &[FlaggedHunk], instruction: &str) -> String {
     let mut p = String::from(
-        "You are executing a reviewer's change request on a git working tree. \
-Make ONLY the changes described. Do not refactor, reformat, or touch files \
-that are not part of this request.\n\n",
+        "You are responding to a reviewer's comment anchored to code in a git working tree. \
+First determine the comment's intent. Questions, requests for explanation, observations, \
+and discussion MUST be answered without editing any file. Edit code ONLY when the reviewer \
+explicitly and unambiguously asks you to change, fix, add, remove, rename, or refactor it. \
+Never infer permission to edit from a question. When editing, change only files anchored below; \
+do not perform unrelated cleanup.\n\n",
     );
     p.push_str(
         "Reviewer's instruction (GitHub-flavored Markdown; interpret headings, lists, task lists, links, and fenced code as structured requirements):\n",
@@ -100,9 +122,10 @@ that are not part of this request.\n\n",
         p.push('\n');
     }
     p.push_str(
-        "\nAfter you finish editing, print a single final line of the form:\n\
-SUMMARY: <one sentence describing what you changed>\n\
-Describe only what you did — do not assess whether the code is correct or good.\n",
+        "\nFinish with exactly one marked line:\n\
+- If you did not edit: RESPONSE: <concise answer to the reviewer>\n\
+- If you edited: SUMMARY: <one sentence describing what you changed>\n\
+Never claim a change you did not make. Do not assess whether code is good.\n",
     );
     p
 }
@@ -194,11 +217,12 @@ pub fn spawn(
         let snapshot = gitio::snapshot(&session.repo).await.ok().flatten();
         let pre: BTreeSet<String> =
             gitio::modified_paths(&session.repo).await.unwrap_or_default().into_iter().collect();
+        let pre_tree = gitio::tree_state(&session.repo, &session.base).await.ok();
 
         let _ = session.events.send(status(
             &job_id,
             JobStatus::Running,
-            Some(format!("{bin} is applying your request…")),
+            Some(format!("{bin} is reading your comment…")),
         ));
 
         let prompt = build_prompt(&flagged, &instruction);
@@ -249,10 +273,14 @@ pub fn spawn(
         }
 
         let stdout = String::from_utf8_lossy(&out.stdout);
-        let summary = extract_summary(&stdout);
 
         let post: BTreeSet<String> =
             gitio::modified_paths(&session.repo).await.unwrap_or_default().into_iter().collect();
+        let post_tree = gitio::tree_state(&session.repo, &session.base).await.ok();
+        let changed_tree =
+            matches!((&pre_tree, &post_tree), (Some(before), Some(after)) if before != after);
+        let answer =
+            if changed_tree { extract_summary(&stdout) } else { extract_response(&stdout) };
         let out_of_scope = scope_violations(&scope, &pre, &post);
 
         // Record the agent's claim on every dispatched flag. This is a
@@ -264,7 +292,15 @@ pub fn spawn(
             let want: BTreeSet<&HunkId> = hunks.iter().collect();
             for f in st.review.flags.iter_mut() {
                 if f.open && f.line == line && want.contains(&f.hunk) {
-                    f.push(FlagEntryKind::AgentClaim, summary.clone(), rev);
+                    f.push(
+                        if changed_tree {
+                            FlagEntryKind::AgentClaim
+                        } else {
+                            FlagEntryKind::AgentResponse
+                        },
+                        answer.clone(),
+                        rev,
+                    );
                     if !out_of_scope.is_empty() {
                         f.push(
                             FlagEntryKind::DispatchNote,
@@ -287,11 +323,11 @@ pub fn spawn(
         }
 
         let (final_status, detail) = if out_of_scope.is_empty() {
-            (JobStatus::Done, summary)
+            (JobStatus::Done, answer)
         } else {
             (
                 JobStatus::ScopeViolation,
-                format!("{summary} — but also modified {} unflagged file(s)", out_of_scope.len()),
+                format!("{answer} — but also modified {} unflagged file(s)", out_of_scope.len()),
             )
         };
         let _ = session.events.send(status(&job_id, final_status, Some(detail)));
@@ -341,5 +377,19 @@ mod tests {
     fn summary_falls_back_to_last_line() {
         let out = "did the thing\nall good";
         assert_eq!(extract_summary(out), "all good");
+    }
+
+    #[test]
+    fn response_prefers_marked_line() {
+        let out = "analysis\nRESPONSE: package script is still required";
+        assert_eq!(extract_response(out), "package script is still required");
+    }
+
+    #[test]
+    fn prompt_does_not_assume_every_comment_is_an_edit() {
+        let prompt = build_prompt(&[], "Is this script still needed?");
+        assert!(prompt.contains("MUST be answered without editing any file"));
+        assert!(prompt.contains("Never infer permission to edit from a question"));
+        assert!(prompt.contains("RESPONSE:"));
     }
 }
