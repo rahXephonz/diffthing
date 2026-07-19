@@ -200,6 +200,11 @@ cargo run -p diffthing -- --offline
 
 AI contributors should read [AGENTS.md](AGENTS.md). Claude, Gemini, Copilot, and Cursor adapters point to same project rules.
 
+## Roadmap
+
+Direction and priorities live in [ROADMAP.md](ROADMAP.md). Near-term focus:
+persistent review state, a smoother connect flow, and a VS Code extension.
+
 ## Contributing
 
 Issues and focused pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing. Preserve core boundary: AI may organize changes and execute explicit requests; human reviewer owns approval.
