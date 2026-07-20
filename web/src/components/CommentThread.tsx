@@ -1,5 +1,20 @@
 import { useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
+import {
+  Bold,
+  Bot,
+  CircleCheck,
+  Code,
+  Heading,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  ListTodo,
+  Quote,
+  TriangleAlert,
+  User,
+} from "lucide-react";
 import type { DispatchState } from "../libs/store";
 import type { Flag, FlagEntry } from "../libs/protocol";
 
@@ -15,25 +30,24 @@ interface Props {
   composerOnly: boolean; // opened via "comment" with no thread yet
 }
 
-type Author = { label: string; initials: string; cls: string };
+type Author = { label: string; icon: ReactNode; cls: string };
 
 const AUTHOR: Record<FlagEntry["kind"], Author> = {
-  human_comment: { label: "You", initials: "Y", cls: "bg-accent/20 text-accent" },
-  agent_response: { label: "Agent", initials: "AI", cls: "bg-accent/20 text-accent" },
-  agent_claim: { label: "Agent", initials: "AI", cls: "bg-green/20 text-green" },
-  dispatch_note: { label: "diffthing", initials: "!", cls: "bg-warn/20 text-warn" },
+  human_comment: { label: "You", icon: <User size={12} />, cls: "bg-accent/20 text-accent" },
+  agent_response: { label: "Agent", icon: <Bot size={12} />, cls: "bg-accent/20 text-accent" },
+  agent_claim: { label: "Agent", icon: <Bot size={12} />, cls: "bg-green/20 text-green" },
+  dispatch_note: {
+    label: "diffthing",
+    icon: <TriangleAlert size={12} />,
+    cls: "bg-warn/20 text-warn",
+  },
 };
 
 function Avatar({ kind }: { kind: FlagEntry["kind"] }) {
   const a = AUTHOR[kind];
   return (
-    <span
-      className={clsx(
-        "w-5 h-5 shrink-0 rounded-full grid place-content-center text-[9px] font-bold",
-        a.cls,
-      )}
-    >
-      {a.initials}
+    <span className={clsx("w-5 h-5 shrink-0 rounded-full grid place-content-center", a.cls)}>
+      {a.icon}
     </span>
   );
 }
@@ -232,17 +246,17 @@ function Composer({
       textarea.setSelectionRange(start + before.length, start + replacement.length - after.length);
     });
   };
-  const tools = [
-    ["Heading", "H", "### ", "", "Heading", true],
-    ["Bold", "B", "**", "**", "bold text", false],
-    ["Italic", "I", "_", "_", "italic text", false],
-    ["Quote", "❯", "> ", "", "quote", true],
-    ["Code", "<>", "`", "`", "code", false],
-    ["Link", "🔗", "[", "](https://)", "link text", false],
-    ["Bulleted list", "•", "- ", "", "list item", true],
-    ["Numbered list", "1.", "1. ", "", "list item", true],
-    ["Task list", "☑", "- [ ] ", "", "task", true],
-  ] as const;
+  const tools: [string, ReactNode, string, string, string, boolean][] = [
+    ["Heading", <Heading size={14} />, "### ", "", "Heading", true],
+    ["Bold", <Bold size={14} />, "**", "**", "bold text", false],
+    ["Italic", <Italic size={14} />, "_", "_", "italic text", false],
+    ["Quote", <Quote size={14} />, "> ", "", "quote", true],
+    ["Code", <Code size={14} />, "`", "`", "code", false],
+    ["Link", <Link size={14} />, "[", "](https://)", "link text", false],
+    ["Bulleted list", <List size={14} />, "- ", "", "list item", true],
+    ["Numbered list", <ListOrdered size={14} />, "1. ", "", "list item", true],
+    ["Task list", <ListTodo size={14} />, "- [ ] ", "", "task", true],
+  ];
   return (
     <div className="flex flex-col gap-2 px-3 py-2">
       <div className="overflow-hidden rounded-md border border-border bg-bg">
@@ -267,11 +281,7 @@ function Composer({
                   type="button"
                   title={title}
                   onClick={() => editSelection(before, after, fallback, linePrefix)}
-                  className={clsx(
-                    "h-8 min-w-8 cursor-pointer border-0 bg-transparent px-2 text-muted hover:text-text",
-                    title === "Bold" && "font-bold",
-                    title === "Italic" && "italic",
-                  )}
+                  className="grid h-8 min-w-8 cursor-pointer place-content-center border-0 bg-transparent px-2 text-muted hover:text-text"
                 >
                   {label}
                 </button>
@@ -365,8 +375,8 @@ export default function CommentThread({
             )}
           >
             {resolved && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green/5 border-b border-border text-xs text-green">
-                ✓ Resolved
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green/5 border-b border-border text-xs text-green">
+                <CircleCheck size={13} /> Resolved
               </div>
             )}
             {flag.thread.map((e, i) => (
