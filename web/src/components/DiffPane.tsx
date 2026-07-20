@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
+import { Check, MessageSquare, Plus } from "lucide-react";
 import type { Highlighter, ThemedToken } from "shiki";
 import { buildHunkModel, type SplitCell, type UnifiedRow } from "../libs/diffRows";
 import { ensureLang, getHighlighter, tokenizeSide } from "../libs/highlighter";
@@ -120,12 +121,14 @@ export default function DiffPane({
     });
 
   const openComposer = (k: string) => setComposerOpen((s) => new Set(s).add(k));
-  const closeComposer = (k: string) =>
+  const closeComposer = (k: string) => {
     setComposerOpen((s) => {
       const n = new Set(s);
       n.delete(k);
       return n;
     });
+  };
+
   const setDraft = (k: string, v: string) => setDrafts((d) => ({ ...d, [k]: v }));
   const submitDraft = (id: string, line: number | null) => {
     const k = anchorKey(id, line);
@@ -139,6 +142,13 @@ export default function DiffPane({
   // tokensFor reads live off highlighter.getLoadedLanguages(), this exists
   // purely to force a re-render when that set changes underneath us.
   const [langsVersion, setLangsVersion] = useState(0);
+
+  // Keyboard hunk cursor: n/p move between hunks, v marks the active one
+  // viewed. Stored as a hunk id (not an index) so it survives reorders.
+  const [activeHunk, setActiveHunk] = useState<string | null>(null);
+  useEffect(() => {
+    setActiveHunk(null); // step changed — cursor restarts
+  }, [hunks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +183,7 @@ export default function DiffPane({
     for (const hunk of hunks) {
       rows.push({ kind: "header", hunk });
       if (isCollapsed(hunk.id)) continue;
-      // Hunk-level thread (the header 💬 button) sits directly under the
+      // Hunk-level thread (the header comment button) sits directly under the
       // header — never off-screen at the bottom of a long hunk.
       if (showThreadAt(hunk.id, null)) rows.push({ kind: "thread", hunk, line: null });
       const model = models.get(hunk.id)!;
@@ -216,6 +226,39 @@ export default function DiffPane({
     overscan: 20,
   });
 
+  // n/p/v handler binds once and reads live state through a ref — flatRows
+  // and the virtualizer change every render.
+  const keyNavRef = useRef({ hunks, flatRows, activeHunk, virtualizer, onMarkViewed });
+  useEffect(() => {
+    keyNavRef.current = { hunks, flatRows, activeHunk, virtualizer, onMarkViewed };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const typing =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "n" && e.key !== "p" && e.key !== "v") return;
+      const { hunks, flatRows, activeHunk, virtualizer, onMarkViewed } = keyNavRef.current;
+      if (hunks.length === 0) return;
+      if (e.key === "v") {
+        onMarkViewed(activeHunk ?? hunks[0].id);
+        return;
+      }
+      const index = hunks.findIndex((h) => h.id === activeHunk);
+      const next =
+        index === -1
+          ? 0
+          : Math.min(hunks.length - 1, Math.max(0, index + (e.key === "n" ? 1 : -1)));
+      const id = hunks[next].id;
+      setActiveHunk(id);
+      const row = flatRows.findIndex((r) => r.kind === "header" && r.hunk.id === id);
+      if (row !== -1) virtualizer.scrollToIndex(row, { align: "start" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const tokensFor = (
     hunk: Hunk,
     side: "old" | "new",
@@ -254,6 +297,7 @@ export default function DiffPane({
             const { hunk } = item;
             const score = scores[hunk.id];
             const status = statusOf(hunk.id);
+
             return (
               <div
                 key={vi.key}
@@ -261,9 +305,11 @@ export default function DiffPane({
                 ref={virtualizer.measureElement}
                 style={style}
                 className={clsx(
-                  "flex items-center gap-2 flex-wrap px-3 py-2 bg-panel border-b border-t border-border",
+                  "flex items-center gap-2 flex-wrap px-3 py-2 bg-panel border-b border-t border-border border-l-2",
+                  hunk.id === activeHunk ? "border-l-accent" : "border-l-transparent",
                   status === "changed_since_viewed" && "border-t-warn",
                 )}
+                onClick={() => setActiveHunk(hunk.id)}
               >
                 <code className="font-code text-[13px]">{hunk.path}</code>
                 {score && (
@@ -279,8 +325,22 @@ export default function DiffPane({
                     changed since viewed
                   </span>
                 )}
-                <button className={chromeButton} onClick={() => onMarkViewed(hunk.id)}>
-                  {status === "viewed" ? "viewed ✓" : "mark viewed"}
+                <button
+                  className={clsx(
+                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1 cursor-pointer border",
+                    status === "viewed"
+                      ? "bg-green/10 border-green/50 text-green hover:border-green"
+                      : "bg-transparent border-border text-text hover:border-accent",
+                  )}
+                  onClick={() => onMarkViewed(hunk.id)}
+                >
+                  {status === "viewed" ? (
+                    <>
+                      viewed <Check size={12} strokeWidth={3} />
+                    </>
+                  ) : (
+                    "mark viewed"
+                  )}
                 </button>
                 {status === "viewed" && (
                   <button className={chromeButton} onClick={() => toggleViewed(hunk.id)}>
@@ -288,11 +348,11 @@ export default function DiffPane({
                   </button>
                 )}
                 <button
-                  className={chromeButton}
+                  className={clsx(chromeButton, "inline-flex items-center gap-1")}
                   onClick={() => openComposer(anchorKey(hunk.id, null))}
                   title="Comment on this hunk"
                 >
-                  💬 comment
+                  <MessageSquare size={12} /> comment
                   {hunkCommentCount(hunk.id) > 0 && (
                     <span className="ml-1 text-accent">{hunkCommentCount(hunk.id)}</span>
                   )}
@@ -353,11 +413,11 @@ export default function DiffPane({
               >
                 {row.type !== "del" && (
                   <button
-                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100"
+                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg opacity-0 group-hover:opacity-100"
                     title="Comment on this line"
                     onClick={() => openComposer(anchorKey(item.hunk.id, row.rawIdx))}
                   >
-                    +
+                    <Plus size={14} strokeWidth={3} />
                   </button>
                 )}
                 <span
@@ -383,8 +443,8 @@ export default function DiffPane({
             );
           }
 
-          // split
           const { left, right } = item;
+
           return (
             <div
               key={vi.key}
@@ -422,11 +482,11 @@ export default function DiffPane({
               >
                 {right && (
                   <button
-                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg text-sm font-bold leading-none opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className="absolute left-0 top-0 z-10 h-full w-5 cursor-pointer grid place-content-center rounded-sm bg-accent text-bg opacity-0 group-hover:opacity-100 focus:opacity-100"
                     title="Comment on this line"
                     onClick={() => openComposer(anchorKey(item.hunk.id, right.rawIdx))}
                   >
-                    +
+                    <Plus size={14} strokeWidth={3} />
                   </button>
                 )}
                 <span
