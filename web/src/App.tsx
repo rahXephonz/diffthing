@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, ChevronDown, ChevronRight, Columns2, Rows3 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Columns2, Rows3, Tag } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DiffPane, { type ViewMode } from "./components/DiffPane";
 import { connect, parseFragment } from "./libs/connection";
@@ -215,7 +215,16 @@ export default function App() {
     <div className="grid grid-cols-[320px_1fr] h-screen">
       <aside className="bg-panel border-r border-border p-4 flex flex-col gap-3 sticky top-0 h-screen overflow-y-auto">
         <header className="flex items-center gap-2 flex-wrap">
-          <strong>diffthing</strong>
+          <div className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text">
+            <img
+              src="/images/diffthing-logo.png"
+              alt="diffthing-logo"
+              aria-hidden="true"
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+            diffthing
+          </div>
+
           {walkthrough?.degraded && (
             <span
               className={clsx(badge, "border-warn/60 text-warn bg-warn/10")}
@@ -569,6 +578,19 @@ function FileTreeSection({
   );
 }
 
+// Build-time workspace version. The landing screen renders precisely when
+// there is no daemon to ask, so this cannot come off the wire.
+function VersionBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium tracking-normal text-muted"
+      title={`diffthing v${__APP_VERSION__}`}
+    >
+      <Tag size={11} aria-hidden="true" />v{__APP_VERSION__}
+    </span>
+  );
+}
+
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
     <code className="font-mono text-[0.85em] text-text bg-panel border border-border rounded px-1.5 py-0.5">
@@ -593,10 +615,16 @@ function Landing({
     tone === "error" ? "bg-highest" : tone === "ended" ? "bg-warn" : "bg-accent animate-pulse";
   return (
     <div className="min-h-screen grid place-content-center px-6">
-      <div className="flex w-[min(30rem,90vw)] flex-col items-center gap-7 text-center">
-        <div className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-text">
-          <span className="h-2.5 w-2.5 rounded-full bg-green shadow-[0_0_14px_2px] shadow-green/50" />
+      <div className="flex w-[min(30rem,70vw)] flex-col items-center gap-7 text-center">
+        <div className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-text">
+          <img
+            src="/images/diffthing-logo.png"
+            alt="diffthing-logo"
+            aria-hidden="true"
+            className="h-8 w-8 shrink-0 object-contain"
+          />
           diffthing
+          <VersionBadge />
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted">
