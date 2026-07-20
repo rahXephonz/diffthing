@@ -415,7 +415,7 @@ impl Session {
 
     /// Agent selected for walkthrough generation. Dispatch `auto` reuses
     /// this exact agent so one session cannot organize with Codex then edit
-    /// with Claude merely because Claude appears first on PATH.
+    /// with Claude|Codex merely because it's appears first on PATH.
     pub fn agent_name(&self) -> Option<&str> {
         self.llm.agent_name()
     }

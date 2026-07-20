@@ -129,7 +129,7 @@ pub async fn snapshot(root: &Path) -> std::io::Result<Option<String>> {
 /// non-destructive: it overwrites tracked paths back to the snapshot but
 /// never runs `git clean`, so untracked user files are never nuked. Files
 /// the agent newly CREATED survive and surface through reconcile — honest,
-/// and no silent data loss (CLAUDE.md: destructive git ops stay opt-in).
+/// and no silent data loss (destructive git ops stay opt-in).
 pub async fn restore_tracked(root: &Path, snapshot_ref: &str) -> std::io::Result<()> {
     Command::new("git")
         .current_dir(root)

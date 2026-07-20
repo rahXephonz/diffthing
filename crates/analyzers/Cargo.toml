@@ -7,7 +7,7 @@ rust-version.workspace = true
 [dependencies]
 diffthing-core = { path = "../core" }
 
-# NEXT (see CLAUDE.md M2): tree-sitter + grammars per ecosystem.
+# NEXT: grammars per ecosystem.
 # tree-sitter = "0.22"
 # tree-sitter-typescript = "0.21"
 # tree-sitter-rust = "0.21"

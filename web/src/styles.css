@@ -9,7 +9,7 @@
   --color-text: #d7dde6;
   --color-green: #9fef00;
   --color-muted: #8a93a2;
-  --color-accent: #6ea8fe;
+  --color-accent: #9fef00;
   --color-add: #1f3d2b;
   --color-del: #46242a;
   --color-warn: #b8860b;
@@ -20,31 +20,21 @@
 
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   /* Code blocks only (diff hunks) — chrome keeps --font-mono above. */
-  --font-code: "IBM Plex Mono", ui-monospace, monospace;
+  --font-code: "Cascadia Code", ui-monospace, monospace;
 }
 
 /* Self-hosted: local-first product, no runtime call to Google Fonts.
-   Latin subset only — code diffs are ASCII-heavy. */
+   Latin subset only — code diffs are ASCII-heavy.
+
+   One file, not one per weight: Cascadia Code is a variable font (wght
+   200–700), so the browser interpolates every weight we use from a single
+   40KB download. */
 @font-face {
-  font-family: "IBM Plex Mono";
+  font-family: "Cascadia Code";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 200 700;
   font-display: swap;
-  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2");
+  src: url("/fonts/cascadia-code.woff2") format("woff2");
 }
 
 body {

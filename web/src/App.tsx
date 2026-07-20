@@ -584,7 +584,7 @@ function FileTreeSection({
 function VersionBadge({ version }: { version: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium tracking-normal text-muted"
+      className="inline-flex items-center gap-1 mt-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium tracking-normal text-muted"
       title={`daemon v${version}`}
     >
       <Tag size={11} aria-hidden="true" />v{version}
