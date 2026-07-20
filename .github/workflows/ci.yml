@@ -54,3 +54,40 @@ jobs:
 
       - name: Lint web
         run: pnpm web:lint
+
+  # Windows binaries were previously cross-compiled but never executed. This
+  # job runs the real daemon on a real Windows runner: boot, HTTP + WS
+  # handshake, watcher reconciliation, sqlite persistence — via the e2e tests,
+  # which spawn the compiled binary against a temp git repo.
+  windows-smoke:
+    name: Windows runtime smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The daemon embeds web/dist at compile time (rust-embed).
+      - name: Build web UI
+        run: pnpm web:build
+
+      - name: Run daemon e2e tests
+        run: cargo test -p diffthing --test e2e
