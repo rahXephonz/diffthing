@@ -139,6 +139,19 @@ diffthing [OPTIONS]
 --llm <LLM>    claude | codex | gemini | kimi | qwen | opencode | none | auto
 ```
 
+## Built with Codex and GPT-5.6
+
+Codex, powered by GPT-5.6, was used as a development partner while building diffthing.
+
+It helped us:
+
+- Map the Rust daemon, WebSocket protocol, and React review interface before making changes.
+- Implement focused UI and workflow changes, including direct hunk-comment dispatch to an agent.
+- Trace review-state and dispatch flows to preserve the product boundary: AI may organize or execute an explicit request, but only a human can approve code or resolve a review thread.
+- Run focused verification such as Rust tests, web linting, and production builds.
+
+Codex was used to accelerate implementation and analysis. It is not the authority that approves code quality or review decisions; diffthing keeps those decisions with the developer.
+
 ## Architecture
 
 ```text
