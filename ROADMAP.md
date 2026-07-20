@@ -12,10 +12,11 @@ reviews and approves.** Nothing below weakens that.
 - Strong core: deterministic scoring, validation, reconciliation, and a
   generated wire protocol, well covered by tests in `crates/core`.
 - Shipped: npm distribution (`npx diffthing`), per-platform prebuilt binaries,
-  and trusted local HTTPS via `local.diffthing.dev`.
-- Thin edges: no persistence across restarts, little daemon/CLI integration
-  testing, no editor integration, and a manual connect step. These — not the
-  core — are what hold back real adoption.
+  trusted local HTTPS via `local.diffthing.dev`, review-state persistence
+  across restarts, and daemon e2e tests running on Linux and Windows.
+- Thin edges: no editor integration, a manual connect step, and no way to
+  reach developers inside the agent tools where AI-assisted changes actually
+  originate. These — not the core — are what hold back real adoption.
 
 ## v0.3 — "fits my workflow"
 
@@ -26,12 +27,23 @@ reviews and approves.** Nothing below weakens that.
    user's agent; optionally open a PR. Closes the loop from review to merged.
 6. **Base flexibility.** Review any range (branch vs main, staged, a specific
    commit), not only working-tree vs `HEAD`.
+7. **Agent plugin / skill distribution.** Ship diffthing as an installable
+   plugin for the agent CLIs where AI-assisted changes are made, so the agent
+   opens a review itself when it finishes a batch of edits — no one has to
+   remember the command. One repo carries a shared `SKILL.md` plus a manifest
+   per ecosystem: Claude Code (`.claude-plugin/marketplace.json`), Codex
+   (`skills/` + `hooks/`), Kimi Code CLI (`plugin.json`), Gemini CLI
+   (extension). Depends on the shell installer below — without raw release
+   binaries the plugin can only shell out to `npx`, which defeats the point.
+   The skill must state the boundary explicitly: the agent opens the review
+   and stops; it never marks viewed, closes a flag, or infers approval from
+   silence.
 
 ## v1.0 — "real product"
 
-7. Settings UI (agent selection, ignore globs) instead of TOML-only config.
-8. Opt-in error reporting and an update-available check.
-9. Distribution breadth:
+8. Settings UI (agent selection, ignore globs) instead of TOML-only config.
+9. Opt-in error reporting and an update-available check.
+10. Distribution breadth:
    - **One-line shell installer** — `curl -fsSL https://diffthing.dev/install.sh | bash`
      (CLI style). No Node/npm needed. Requires: CI uploads the raw
      per-platform binaries (already built for the npm packages) as GitHub
@@ -41,11 +53,11 @@ reviews and approves.** Nothing below weakens that.
      the script on `diffthing.dev` via Cloudflare Pages/Worker. A `.ps1`
      variant covers Windows.
    - Homebrew tap, `cargo-binstall`, Scoop.
-10. Docs site and a 60-second demo — the value is not obvious cold.
-11. Certificate-renewal automation for `local.diffthing.dev` (Let's Encrypt is
+11. Docs site and a 60-second demo — the value is not obvious cold.
+12. Certificate-renewal automation for `local.diffthing.dev` (Let's Encrypt is
     90 days) as a scheduled job, so a release never silently ships an expired
     cert.
-12. **Connect UX.** Auto-open the browser to the printed URL on start, and use a
+13. **Connect UX.** Auto-open the browser to the printed URL on start, and use a
     fixed default port (`4983`, falling back if busy) for a stable, bookmarkable
     `https://local.diffthing.dev:4983`. Removes the bare-domain confusion. We will take it
     in the future, for now current flow its okay.
@@ -61,5 +73,7 @@ Ergonomics are what make people stay.
 
 ## Sequencing
 
-**Persistence → connect UX → VS Code extension.** Those three convert diffthing
-from "neat demo" into "I run it on every PR." Everything else is polish on top.
+Persistence shipped in v0.2. Next: **shell installer → agent plugin → VS Code
+extension.** The installer unblocks the plugin, the plugin puts diffthing in
+front of developers at the moment an agent finishes editing, and the extension
+meets the ones who never leave their editor. Everything else is polish on top.
