@@ -56,6 +56,10 @@ struct Daemon {
     child: Child,
     port: u16,
     token: String,
+    /// Keeps the stdout pipe's read end open for the daemon's lifetime.
+    /// Dropping it after parsing the URL closes the pipe, and the daemon's
+    /// very next println! dies of EPIPE — the original e2e flake.
+    _stdout: BufReader<std::process::ChildStdout>,
 }
 
 impl Daemon {
@@ -88,8 +92,14 @@ fn spawn_daemon(repo: &Path) -> Daemon {
         .spawn()
         .unwrap();
     let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
     let mut parsed = None;
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 {
+            break; // EOF — daemon exited before printing a URL
+        }
         // "  open  http://127.0.0.1:PORT/#port=PORT&token=TOKEN"
         if let Some(rest) = line.trim().strip_prefix("open") {
             let url = rest.trim();
@@ -104,7 +114,7 @@ fn spawn_daemon(repo: &Path) -> Daemon {
         }
     }
     let (port, token) = parsed.expect("daemon printed no URL with a port and token");
-    Daemon { child, port, token }
+    Daemon { child, port, token, _stdout: reader }
 }
 
 /// Minimal HTTP GET over raw TCP — enough to probe /health and the SPA
