@@ -11,6 +11,7 @@ mod gitio;
 mod llm;
 mod server;
 mod session;
+mod store;
 mod tls;
 mod watcher;
 

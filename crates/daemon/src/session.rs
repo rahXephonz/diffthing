@@ -6,6 +6,7 @@
 //! ApplyUpdate. The screen never moves under the reader's cursor.
 
 use crate::llm::AnyLlm;
+use crate::store::Store;
 use crate::{gitio, llm};
 use diffthing_analyzers::Registry;
 use diffthing_core::hunk::{FileDiff, Hunk, HunkId};
@@ -45,6 +46,9 @@ pub struct Session {
     pub writer: Mutex<()>,
     registry: Registry,
     llm: AnyLlm,
+    /// Review-state persistence. `None` when the `.diffthing/` store could
+    /// not be opened — persistence is best-effort and never blocks review.
+    store: Option<Store>,
 }
 
 fn all_hunks(files: &[FileDiff]) -> Vec<Hunk> {
@@ -64,27 +68,71 @@ impl Session {
         let scores: BTreeMap<HunkId, ImpactScore> =
             hunks.iter().map(|h| (h.id.clone(), score_hunk(h, &registry.signals_for(h)))).collect();
         let tree_state = gitio::tree_state(repo, base).await?;
+
+        // Resume persisted review. The store keeps state keyed by content
+        // hash; on boot we reconcile the persisted hunk set against the fresh
+        // diff so flags migrate and stale "viewed" marks downgrade through the
+        // same honesty rules as the live watcher. Best-effort throughout.
+        let store = Store::open(repo).ok();
+        let mut review = ReviewState::default();
+        let mut resumed_walkthrough = None;
+        if let Some(store) = &store {
+            if let Some((old_hunks, mut persisted, walkthrough)) = store.load(base).await {
+                let report = reconcile(&old_hunks, &hunks);
+                apply_to_review(&mut persisted, &report);
+                review = persisted;
+                // Reuse the saved organization only when the tree is
+                // identical to when it was saved — no re-asking the LLM to
+                // rescope unchanged work. Degraded fallbacks are not reused
+                // so a restart retries the LLM.
+                if !walkthrough.degraded && walkthrough.tree_state == tree_state {
+                    resumed_walkthrough = Some(walkthrough);
+                }
+            }
+        }
+
         // Initial organization is part of boot. The first snapshot must
         // already describe the current tree; Regenerate remains background.
-        let walkthrough = llm::generate(&llm_client, &hunks, &scores, &tree_state, 1, 2).await;
+        let walkthrough = match resumed_walkthrough {
+            Some(w) => w,
+            None => {
+                let w = llm::generate(&llm_client, &hunks, &scores, &tree_state, 1, 2).await;
+                // Save immediately so a restart before any review action
+                // still resumes this organization instead of re-generating.
+                if let Some(store) = &store {
+                    let _ = store.save(base, &hunks, &review, &w).await;
+                }
+                w
+            }
+        };
 
         let (events, _) = broadcast::channel(64);
         Ok(Self {
             repo: repo.to_path_buf(),
             base: base.to_string(),
             token,
-            state: Mutex::new(Snapshot {
-                walkthrough,
-                files,
-                scores,
-                review: ReviewState::default(),
-            }),
+            state: Mutex::new(Snapshot { walkthrough, files, scores, review }),
             pending: Mutex::new(None),
             events,
             writer: Mutex::new(()),
             registry,
             llm: llm_client,
+            store,
         })
+    }
+
+    /// Mirror current review state to the `.diffthing/` store. Best-effort:
+    /// a failed write is logged and dropped, never surfaced to the reviewer.
+    /// Call after every review-state transition.
+    pub async fn persist(&self) {
+        let Some(store) = &self.store else { return };
+        let (hunks, review, walkthrough) = {
+            let state = self.state.lock().await;
+            (all_hunks(&state.files), state.review.clone(), state.walkthrough.clone())
+        };
+        if let Err(e) = store.save(&self.base, &hunks, &review, &walkthrough).await {
+            eprintln!("diffthing: failed to persist review state: {e}");
+        }
     }
 
     /// Counts printed once initial diff collection and organization finish.
@@ -130,7 +178,9 @@ impl Session {
             let mut state = self.state.lock().await;
             state.review.mark_viewed(id.clone());
         }
-        self.stage_if_approved(&id).await
+        let staged = self.stage_if_approved(&id).await;
+        self.persist().await;
+        staged
     }
 
     /// Re-check file approval after any action that can clear its final
@@ -206,6 +256,10 @@ impl Session {
         state.files = pending.files;
         state.scores = scores;
         state.walkthrough = walkthrough;
+        drop(state);
+        // Reconciliation just migrated flags and re-queued changed hunks;
+        // persist so a restart mid-review doesn't replay stale state.
+        self.persist().await;
         true
     }
 
@@ -252,6 +306,7 @@ impl Session {
             };
             drop(state);
             let _ = session.events.send(snap);
+            session.persist().await;
         });
     }
 
@@ -349,6 +404,7 @@ impl Session {
             };
             drop(state);
             let _ = session.events.send(snap);
+            session.persist().await;
         });
     }
 

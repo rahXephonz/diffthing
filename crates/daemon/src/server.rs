@@ -270,6 +270,7 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                                 None => st.review.flags.push(Flag::new(hunk, line, comment)),
                             }
                         }
+                        session.persist().await;
                         broadcast_review(&session).await;
                     }
                     ClientMsg::CloseFlag { hunk, line } => {
@@ -283,6 +284,7 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                         // Last open flag may have been the only reason a
                         // fully viewed file could not enter staged changes.
                         session.stage_if_approved(&hunk).await;
+                        session.persist().await;
                         broadcast_review(&session).await;
                     }
                     ClientMsg::ApplyUpdate { to_revision } => {

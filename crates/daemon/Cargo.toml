@@ -31,5 +31,11 @@ mime_guess = "2"
 
 toml = "0.8"
 
-# NEXT (see CLAUDE.md):
-# rusqlite = { version = "0.31", features = ["bundled"] }   # M1: .diffthing/ persistence
+# .diffthing/ review-state persistence. `bundled` compiles SQLite from source
+# so release cross-compiles need no system libsqlite3.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[dev-dependencies]
+# e2e tests dial the real daemon binary over WebSocket.
+tokio-tungstenite = "0.21"
+futures-util = "0.3"

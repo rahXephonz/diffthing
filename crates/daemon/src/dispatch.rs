@@ -321,6 +321,9 @@ pub fn spawn(
             drop(st);
             let _ = session.events.send(snap);
         }
+        // Agent claims and dispatch notes just landed on the flags; persist
+        // so they survive a restart before the reviewer closes them.
+        session.persist().await;
 
         let (final_status, detail) = if out_of_scope.is_empty() {
             (JobStatus::Done, answer)
