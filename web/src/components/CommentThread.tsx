@@ -24,6 +24,7 @@ interface Props {
   draft: string;
   onDraftChange: (v: string) => void;
   onSubmit: () => void; // add_flag → append reply / open thread
+  onSubmitAndDispatch: () => void; // add_flag, then request_change using that comment
   onResolve: () => void; // close_flag (human only)
   onDispatch: (instruction: string) => void; // request_change
   onCancel: () => void; // close the bare composer
@@ -212,16 +213,20 @@ function Composer({
   draft,
   onDraftChange,
   onSubmit,
+  onSubmitAndDispatch,
   onCancel,
   placeholder,
   showCancel,
+  dispatching,
 }: {
   draft: string;
   onDraftChange: (v: string) => void;
   onSubmit: () => void;
+  onSubmitAndDispatch: () => void;
   onCancel: () => void;
   placeholder: string;
   showCancel: boolean;
+  dispatching: boolean;
 }) {
   const [mode, setMode] = useState<"write" | "preview">("write");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -323,6 +328,14 @@ function Composer({
         >
           Comment
         </button>
+        <button
+          className="text-xs bg-accent/15 border border-accent/50 rounded-md px-2.5 py-1 cursor-pointer text-accent hover:bg-accent/25 disabled:opacity-40"
+          disabled={draft.trim() === "" || dispatching}
+          onClick={onSubmitAndDispatch}
+          title="Posts this comment, then asks your agent to act on it"
+        >
+          {dispatching ? "Agent busy…" : "Ask agent"}
+        </button>
       </div>
     </div>
   );
@@ -334,12 +347,21 @@ export default function CommentThread({
   draft,
   onDraftChange,
   onSubmit,
+  onSubmitAndDispatch,
   onResolve,
   onDispatch,
   onCancel,
   composerOnly,
 }: Props) {
-  const running = dispatch?.status === "running";
+  // Dispatch itself is fire-and-forget. Keep the composer disabled between
+  // the click and the daemon's first status event so it immediately reflects
+  // the normal "Agent busy" flow and cannot submit the same prompt twice.
+  const [dispatchStarting, setDispatchStarting] = useState(false);
+  const running = dispatch?.status === "running" || (dispatchStarting && dispatch === null);
+  const submitAndDispatch = () => {
+    setDispatchStarting(true);
+    onSubmitAndDispatch();
+  };
 
   if (flags.length === 0) {
     if (!composerOnly) return null;
@@ -350,9 +372,11 @@ export default function CommentThread({
             draft={draft}
             onDraftChange={onDraftChange}
             onSubmit={onSubmit}
+            onSubmitAndDispatch={submitAndDispatch}
             onCancel={onCancel}
             placeholder="Leave a comment on this hunk…"
             showCancel
+            dispatching={running}
           />
         </div>
       </div>
@@ -394,9 +418,11 @@ export default function CommentThread({
                   draft={draft}
                   onDraftChange={onDraftChange}
                   onSubmit={onSubmit}
+                  onSubmitAndDispatch={submitAndDispatch}
                   onCancel={onCancel}
                   placeholder="Reply…"
                   showCancel={false}
+                  dispatching={running}
                 />
                 <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border">
                   <button
