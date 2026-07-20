@@ -53,7 +53,7 @@ function Avatar({ kind }: { kind: FlagEntry["kind"] }) {
   );
 }
 
-function Comment({ entry }: { entry: FlagEntry }) {
+function Comment({ entry, onAskAgent }: { entry: FlagEntry; onAskAgent?: () => void }) {
   const a = AUTHOR[entry.kind];
 
   return (
@@ -73,6 +73,17 @@ function Comment({ entry }: { entry: FlagEntry }) {
       <div className="px-3 pb-2">
         <MarkdownPreview source={entry.body} />
       </div>
+      {onAskAgent && (
+        <div className="flex px-3 pb-2">
+          <button
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent disabled:cursor-default disabled:opacity-40"
+            onClick={onAskAgent}
+            title="Ask your agent about this comment"
+          >
+            <Bot size={12} /> Ask agent
+          </button>
+        </div>
+      )}
       {entry.kind === "agent_claim" && (
         <p className="px-3 pb-2 -mt-1 text-[10px] text-muted italic m-0">
           Reconciliation confirms the code actually changed — you decide if it's right.
@@ -358,9 +369,12 @@ export default function CommentThread({
   // the normal "Agent busy" flow and cannot submit the same prompt twice.
   const [dispatchStarting, setDispatchStarting] = useState(false);
   const running = dispatch?.status === "running" || (dispatchStarting && dispatch === null);
-  const submitAndDispatch = () => {
+  const startDispatch = (request: () => void) => {
     setDispatchStarting(true);
-    onSubmitAndDispatch();
+    request();
+  };
+  const submitAndDispatch = () => {
+    startDispatch(onSubmitAndDispatch);
   };
 
   if (flags.length === 0) {
@@ -387,9 +401,13 @@ export default function CommentThread({
     <div className="px-4 py-3 bg-panel/40 border-b border-border flex flex-col gap-3">
       {flags.map((flag, fi) => {
         const resolved = !flag.open;
-        const instruction = [...flag.thread]
-          .reverse()
-          .find((entry) => entry.kind === "human_comment")?.body;
+        const latestHumanIndex = flag.thread.reduce(
+          (latest, entry, index) => (entry.kind === "human_comment" ? index : latest),
+          -1,
+        );
+        const agentRespondedToLatestHuman = flag.thread
+          .slice(latestHumanIndex + 1)
+          .some((entry) => entry.kind === "agent_response" || entry.kind === "agent_claim");
         return (
           <div
             key={fi}
@@ -404,7 +422,15 @@ export default function CommentThread({
               </div>
             )}
             {flag.thread.map((e, i) => (
-              <Comment key={i} entry={e} />
+              <Comment
+                key={i}
+                entry={e}
+                onAskAgent={
+                  !resolved && !running && i === latestHumanIndex && !agentRespondedToLatestHuman
+                    ? () => startDispatch(() => onDispatch(e.body))
+                    : undefined
+                }
+              />
             ))}
 
             {!resolved && (
@@ -425,18 +451,6 @@ export default function CommentThread({
                   dispatching={running}
                 />
                 <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border">
-                  <button
-                    className={clsx(
-                      running ? "cursor-default" : "cursor-pointer",
-                      "text-xs bg-transparent border border-border rounded-md px-2.5 py-1 text-text hover:border-accent disabled:opacity-40",
-                    )}
-                    disabled={running}
-                    aria-disabled={running}
-                    onClick={() => onDispatch(instruction ?? "")}
-                    title="Ask your agent; it edits only when your comment explicitly requests a change"
-                  >
-                    {running ? "Agent busy…" : "Ask agent"}
-                  </button>
                   <button
                     className="text-xs bg-transparent border border-border rounded-md px-2.5 py-1 cursor-pointer text-muted hover:border-green hover:text-green"
                     onClick={onResolve}

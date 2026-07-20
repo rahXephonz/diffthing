@@ -152,30 +152,33 @@ pub fn spawn(
     instruction: String,
     runner: String,
 ) {
+    let job_id = format!("job-{:08x}", rand::random::<u32>());
+    let Some((bin, args)) = resolve_runner(&runner, session.agent_name()) else {
+        let _ = session.events.send(status(
+            &job_id,
+            JobStatus::Failed,
+            Some(format!(
+                "no runnable agent for '{runner}' — install one of: {}",
+                RUNNERS.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")
+            )),
+        ));
+        return;
+    };
+
+    // Claim the writer lock before creating the background task. This makes
+    // duplicate clicks fail synchronously instead of racing several spawned
+    // tasks toward the lock.
+    let Ok(writer_guard) = Arc::clone(&session.writer).try_lock_owned() else {
+        let _ = session.events.send(ServerMsg::Error {
+            code: ErrorCode::BusyWriterLock,
+            message: "an agent is already editing — wait for it to finish".into(),
+        });
+        return;
+    };
+
     tokio::spawn(async move {
-        let job_id = format!("job-{:08x}", rand::random::<u32>());
-
-        let Some((bin, args)) = resolve_runner(&runner, session.agent_name()) else {
-            let _ = session.events.send(status(
-                &job_id,
-                JobStatus::Failed,
-                Some(format!(
-                    "no runnable agent for '{runner}' — install one of: {}",
-                    RUNNERS.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")
-                )),
-            ));
-            return;
-        };
-
-        // Single writer. Held for the whole run; released on drop.
-        let Ok(_guard) = session.writer.try_lock() else {
-            let _ = session.events.send(ServerMsg::Error {
-                code: ErrorCode::BusyWriterLock,
-                message: "an agent is already editing — wait for it to finish".into(),
-            });
-            return;
-        };
-
+        // Retain the owned guard for the entire background run.
+        let _writer_guard = writer_guard;
         // Gather flagged hunk context + the in-scope file set, under lock.
         let (flagged, scope): (Vec<FlaggedHunk>, BTreeSet<String>) = {
             let st = session.state.lock().await;
