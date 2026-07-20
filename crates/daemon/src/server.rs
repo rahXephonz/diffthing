@@ -18,7 +18,6 @@ use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
 use diffthing_core::protocol::{ClientMsg, ErrorCode, ServerMsg, PROTOCOL_VERSION};
 use rust_embed::RustEmbed;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// How the daemon exposes the review UI.
@@ -45,11 +44,15 @@ struct AppState {
     port: u16,
 }
 
+/// Serves on an ALREADY-BOUND listener (bound at boot, before the URL was
+/// printed) — rebinding here would race other processes onto a port the
+/// user was already told to open.
 pub async fn serve(
-    port: u16,
+    listener: std::net::TcpListener,
     session: Arc<Session>,
     mode: ServeMode,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let port = listener.local_addr()?.port();
     // The daemon serves the SPA itself in both modes, so the page and its WS
     // target always share one origin — the browser never sees a cross-origin
     // or mixed-content request.
@@ -59,14 +62,14 @@ pub async fn serve(
         .with_state(AppState { session, port })
         .fallback(get(serve_asset));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    listener.set_nonblocking(true)?;
     match mode {
         ServeMode::HostedTls { cert_pem, key_pem } => {
             let config = RustlsConfig::from_pem(cert_pem, key_pem).await?;
-            axum_server::bind_rustls(addr, config).serve(app.into_make_service()).await?;
+            axum_server::from_tcp_rustls(listener, config).serve(app.into_make_service()).await?;
         }
         ServeMode::OfflineHttp => {
-            let listener = tokio::net::TcpListener::bind(addr).await?;
+            let listener = tokio::net::TcpListener::from_std(listener)?;
             axum::serve(listener, app).await?;
         }
     }

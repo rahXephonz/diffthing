@@ -58,12 +58,11 @@ struct Cli {
     llm: String,
 }
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .expect("bind to ephemeral port")
-        .local_addr()
-        .expect("local addr")
-        .port()
+/// Bind the serving socket up front and KEEP it. Picking a free port and
+/// releasing it invites another process onto the same port before `serve`
+/// rebinds (concurrent daemons race exactly this way in CI).
+fn bind_port(port: Option<u16>) -> std::io::Result<TcpListener> {
+    TcpListener::bind(("127.0.0.1", port.unwrap_or(0)))
 }
 
 fn gen_token() -> String {
@@ -129,7 +128,8 @@ async fn main() -> anyhow_lite::Result<()> {
         std::process::exit(1);
     }
 
-    let port = cli.port.unwrap_or_else(free_port);
+    let listener = bind_port(cli.port)?;
+    let port = listener.local_addr()?.port();
     let token = gen_token();
 
     let llm_client = llm::AnyLlm::from_choice(config::resolve_agent(&cli.llm));
@@ -176,7 +176,7 @@ async fn main() -> anyhow_lite::Result<()> {
     println!("  open  {url}");
     println!();
 
-    server::serve(port, session, mode).await
+    server::serve(listener, session, mode).await
 }
 
 /// Tiny local Result alias to avoid pulling anyhow for the scaffold.

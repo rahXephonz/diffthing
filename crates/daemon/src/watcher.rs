@@ -20,29 +20,33 @@ pub fn spawn(repo: PathBuf, session: Arc<Session>) {
     let gitignore = gi.build().ok();
 
     let repo_for_watcher = repo.clone();
-    std::thread::spawn(move || {
-        let tx2 = tx;
-        let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(event) = res {
-                let relevant = event.paths.iter().any(|p| {
-                    let rel = p.strip_prefix(&repo_for_watcher).unwrap_or(p);
-                    let s = rel.to_string_lossy();
-                    if s.starts_with(".git") || s.starts_with(".diffthing") {
-                        return false;
-                    }
-                    match &gitignore {
-                        Some(gi) => !gi.matched(rel, p.is_dir()).is_ignore(),
-                        None => true,
-                    }
-                });
-                if relevant {
-                    let _ = tx2.send(());
+    let tx2 = tx;
+    // Arm the watcher BEFORE returning: callers print the URL right after
+    // spawn, and a change written immediately by a fast client must not
+    // slip through an unwatched window.
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(event) = res {
+            let relevant = event.paths.iter().any(|p| {
+                let rel = p.strip_prefix(&repo_for_watcher).unwrap_or(p);
+                let s = rel.to_string_lossy();
+                if s.starts_with(".git") || s.starts_with(".diffthing") {
+                    return false;
                 }
+                match &gitignore {
+                    Some(gi) => !gi.matched(rel, p.is_dir()).is_ignore(),
+                    None => true,
+                }
+            });
+            if relevant {
+                let _ = tx2.send(());
             }
-        })
-        .expect("create watcher");
-        watcher.watch(&repo, RecursiveMode::Recursive).expect("watch repo");
-        // Park the thread; watcher lives as long as the process.
+        }
+    })
+    .expect("create watcher");
+    watcher.watch(&repo, RecursiveMode::Recursive).expect("watch repo");
+    // Park a thread owning the watcher; it lives as long as the process.
+    std::thread::spawn(move || {
+        let _watcher = watcher;
         loop {
             std::thread::park();
         }
