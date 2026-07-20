@@ -223,6 +223,7 @@ export default function App() {
               className="h-7 w-7 shrink-0 object-contain"
             />
             diffthing
+            <VersionBadge version={conn.daemonVersion} />
           </div>
 
           {walkthrough?.degraded && (
@@ -578,15 +579,15 @@ function FileTreeSection({
   );
 }
 
-// Build-time workspace version. The landing screen renders precisely when
-// there is no daemon to ask, so this cannot come off the wire.
-function VersionBadge() {
+// Version of the daemon actually serving this session, straight off the
+// HelloAck. Only rendered in the sidebar, which exists only while connected.
+function VersionBadge({ version }: { version: string }) {
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium tracking-normal text-muted"
-      title={`diffthing v${__APP_VERSION__}`}
+      title={`daemon v${version}`}
     >
-      <Tag size={11} aria-hidden="true" />v{__APP_VERSION__}
+      <Tag size={11} aria-hidden="true" />v{version}
     </span>
   );
 }
@@ -624,7 +625,6 @@ function Landing({
             className="h-8 w-8 shrink-0 object-contain"
           />
           diffthing
-          <VersionBadge />
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted">
