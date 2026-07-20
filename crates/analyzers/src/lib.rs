@@ -4,7 +4,7 @@
 //! Rule: analyzers are DETERMINISTIC. They feed `ExternalSignals` into the
 //! core scorer. No LLM in this crate, ever.
 //!
-//! v1 depth ladder (business decision, see CLAUDE.md):
+//! v1 depth ladder (business decision):
 //!   TS/JS: full (module graph fan-in + export surface delta)  [M2]
 //!   Rust/Elixir: parse-level (public surface only)            [M3]
 //!   Solidity: premium domain analyzer                         [M4]

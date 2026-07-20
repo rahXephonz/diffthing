@@ -1,4 +1,4 @@
-//! Incremental assignment (CLAUDE.md M1): when the tree changes, the
+//! Incremental assignment: when the tree changes, the
 //! existing walkthrough structure PERSISTS. Carried hunks keep their step,
 //! changed hunks follow their lineage into the same step, new hunks in a
 //! file some step already claims inherit that step, and only true orphans

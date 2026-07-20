@@ -2,7 +2,7 @@
 //! its own provider or key. Resolution order:
 //!   1. --llm flag (claude | codex | gemini | kimi | qwen | opencode | none | auto)
 //!   2. active agent session inherited from environment
-//!   3. ~/.config/diffthing/config.toml  ([llm] agent = "claude")
+//!   3. ~/.config/diffthing/config.toml  ([llm] agent = "claude" | "codex")
 //!   4. auto-detect: first installed agent CLI on PATH
 //!
 //! Nothing found -> NoopLlm -> deterministic fallback walkthrough

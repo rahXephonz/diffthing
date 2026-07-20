@@ -6,7 +6,7 @@
 //! radius (scope check) -> record the agent's SUMMARY as an AgentClaim
 //! (what it did, never a verdict). The edited files then flow back through
 //! the SAME watcher->reconcile pipeline as any other change — no special
-//! apply path (CLAUDE.md invariants 3, 4, 9). Reconcile independently
+//! apply path. Reconcile independently
 //! confirms the hunk moved and flips `addressed_claim`; the human still
 //! clicks Close.
 
