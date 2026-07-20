@@ -9,7 +9,6 @@
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
-use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -19,10 +18,6 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 const PROTOCOL_VERSION: u16 = 5;
 const WAIT: Duration = Duration::from_secs(30);
-
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
-}
 
 fn git(repo: &Path, args: &[&str]) {
     let out = Command::new("git").arg("-C").arg(repo).args(args).output().unwrap();
@@ -45,9 +40,16 @@ fn setup_repo() -> PathBuf {
 }
 
 fn rand_id() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    // Clock alone is not unique enough: concurrent tests observe the same
+    // timestamp. The counter disambiguates within a process, the timestamp
+    // across runs (stale dirs from a killed earlier run).
+    static SEQ: AtomicU64 = AtomicU64::new(0);
     let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-    t.as_nanos() as u64 ^ (std::process::id() as u64) << 32
+    (t.as_nanos() as u64)
+        ^ ((std::process::id() as u64) << 32)
+        ^ (SEQ.fetch_add(1, Ordering::Relaxed) << 48)
 }
 
 struct Daemon {
@@ -63,28 +65,36 @@ impl Drop for Daemon {
     }
 }
 
-/// Spawn the daemon and block until it prints its URL, from which the
-/// session token is parsed — the same channel a human uses.
+/// Spawn the daemon and block until it prints its URL, from which the port
+/// and session token are parsed — the same channel a human uses. The daemon
+/// picks its own free port: tests choosing one up front and releasing it
+/// races other concurrently spawning tests onto the same port.
 fn spawn_daemon(repo: &Path) -> Daemon {
-    let port = free_port();
     let mut child = Command::new(env!("CARGO_BIN_EXE_diffthing"))
-        .args(["--offline", "--llm", "none", "--port"])
-        .arg(port.to_string())
-        .arg("--repo")
+        .args(["--offline", "--llm", "none", "--repo"])
         .arg(repo)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
     let stdout = child.stdout.take().unwrap();
-    let mut token = None;
+    let mut parsed = None;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        // "  open  http://127.0.0.1:PORT/#port=PORT&token=TOKEN"
         if let Some(rest) = line.trim().strip_prefix("open") {
-            token = rest.trim().split("token=").nth(1).map(str::to_string);
+            let url = rest.trim();
+            let port = url
+                .split("#port=")
+                .nth(1)
+                .and_then(|s| s.split('&').next())
+                .and_then(|s| s.parse::<u16>().ok());
+            let token = url.split("token=").nth(1).map(str::to_string);
+            parsed = port.zip(token);
             break;
         }
     }
-    Daemon { child, port, token: token.expect("daemon printed no URL with a token") }
+    let (port, token) = parsed.expect("daemon printed no URL with a port and token");
+    Daemon { child, port, token }
 }
 
 /// Minimal HTTP GET over raw TCP — enough to probe /health and the SPA
