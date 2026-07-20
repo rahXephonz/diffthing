@@ -58,6 +58,16 @@ struct Daemon {
     token: String,
 }
 
+impl Daemon {
+    /// A dead daemon turns every later timeout into noise — fail loudly at
+    /// the moment of death instead.
+    fn assert_alive(&mut self) {
+        if let Ok(Some(status)) = self.child.try_wait() {
+            panic!("daemon exited early with {status} (its stderr is above)");
+        }
+    }
+}
+
 impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -74,7 +84,7 @@ fn spawn_daemon(repo: &Path) -> Daemon {
         .args(["--offline", "--llm", "none", "--repo"])
         .arg(repo)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit()) // daemon panics/errors belong in test output
         .spawn()
         .unwrap();
     let stdout = child.stdout.take().unwrap();
@@ -120,13 +130,18 @@ async fn http_get(port: u16, path: &str) -> String {
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
-async fn ws_connect(port: u16) -> Ws {
+async fn ws_connect(daemon: &mut Daemon) -> Ws {
     let deadline = tokio::time::Instant::now() + WAIT;
+    let port = daemon.port;
     loop {
+        daemon.assert_alive();
         match tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await {
             Ok((ws, _)) => return ws,
-            Err(_) => {
-                assert!(tokio::time::Instant::now() < deadline, "ws never connected");
+            Err(e) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "ws never connected; last error: {e:?}"
+                );
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
@@ -194,9 +209,9 @@ async fn boot_serves_health_and_spa() {
 #[tokio::test(flavor = "multi_thread")]
 async fn ws_handshake_review_roundtrip_and_restart_resume() {
     let repo = setup_repo();
-    let daemon = spawn_daemon(&repo);
+    let mut daemon = spawn_daemon(&repo);
 
-    let mut ws = ws_connect(daemon.port).await;
+    let mut ws = ws_connect(&mut daemon).await;
     let snapshot = handshake(&mut ws, &daemon.token).await;
 
     // --llm none ⇒ deterministic fallback, honestly labeled.
@@ -219,9 +234,9 @@ async fn ws_handshake_review_roundtrip_and_restart_resume() {
     // resume: same content hash, same viewed mark, same open flag.
     drop(ws);
     drop(daemon);
-    let daemon2 = spawn_daemon(&repo);
+    let mut daemon2 = spawn_daemon(&repo);
     assert_ne!(daemon2.token, "", "fresh token expected");
-    let mut ws2 = ws_connect(daemon2.port).await;
+    let mut ws2 = ws_connect(&mut daemon2).await;
     let snapshot2 = handshake(&mut ws2, &daemon2.token).await;
     assert_eq!(snapshot2["review"]["status"][&hunk], "viewed", "viewed mark must survive restart");
     assert_eq!(snapshot2["review"]["flags"][0]["thread"][0]["body"], "why three?");
@@ -234,17 +249,17 @@ async fn ws_handshake_review_roundtrip_and_restart_resume() {
 #[tokio::test(flavor = "multi_thread")]
 async fn ws_rejects_bad_token_and_protocol_mismatch() {
     let repo = setup_repo();
-    let daemon = spawn_daemon(&repo);
+    let mut daemon = spawn_daemon(&repo);
 
     // Wrong token: explicit BadToken error, then nothing.
-    let mut ws = ws_connect(daemon.port).await;
+    let mut ws = ws_connect(&mut daemon).await;
     send_json(&mut ws, json!({ "type": "hello", "protocol": PROTOCOL_VERSION, "token": "wrong" }))
         .await;
     let err = recv_type(&mut ws, "error").await;
     assert_eq!(err["code"], "bad_token");
 
     // Right token, wrong protocol: ProtocolMismatch.
-    let mut ws = ws_connect(daemon.port).await;
+    let mut ws = ws_connect(&mut daemon).await;
     send_json(&mut ws, json!({ "type": "hello", "protocol": 1, "token": daemon.token })).await;
     let err = recv_type(&mut ws, "error").await;
     assert_eq!(err["code"], "protocol_mismatch");
@@ -279,9 +294,9 @@ async fn ws_rejects_disallowed_origin() {
 #[tokio::test(flavor = "multi_thread")]
 async fn watcher_reconciliation_announces_and_applies() {
     let repo = setup_repo();
-    let daemon = spawn_daemon(&repo);
+    let mut daemon = spawn_daemon(&repo);
 
-    let mut ws = ws_connect(daemon.port).await;
+    let mut ws = ws_connect(&mut daemon).await;
     let snapshot = handshake(&mut ws, &daemon.token).await;
     let revision_before = snapshot["walkthrough"]["revision"].as_u64().unwrap();
 
