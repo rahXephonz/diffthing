@@ -65,7 +65,9 @@ if [ "${FORCE:-}" = "1" ]; then
 fi
 
 echo "cert-prod: issuing ${DOMAIN} via ${DNS_PROVIDER} (DNS-01) using ${ACME}"
-"$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN" "${FORCE_ARGS[@]}"
+# ${arr[@]+"${arr[@]}"} guard: expanding an empty array under `set -u` errors
+# on macOS's bash 3.2 ("unbound variable"); this yields nothing when empty.
+"$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN" ${FORCE_ARGS[@]+"${FORCE_ARGS[@]}"}
 
 # --install-cert copies the current material to fixed paths and is the
 # renew-safe way to keep these files fresh (acme.sh re-runs it on renewal).
