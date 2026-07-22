@@ -46,12 +46,12 @@ npm install -g diffthing
 diffthing
 ```
 
-The npm build ships a prebuilt binary with the review UI and a certificate for
-`local.diffthing.dev` embedded. It serves the UI over **HTTPS via
-`local.diffthing.dev`**, a domain whose public DNS resolves to `127.0.0.1` — so
-the page loads from your own machine over a browser-trusted origin, and the
+The npm build ships a prebuilt binary with the review UI embedded. It serves
+the UI over **HTTPS via `local.diffthing.dev`**, a domain whose public DNS
+resolves to `127.0.0.1` — so the page loads from your own machine and the
 WebSocket is same-origin (no mixed content, no Local Network Access prompt).
-Nothing to install or trust — it just works. See
+On first run the daemon generates a per-install self-signed certificate; your
+browser asks to trust it once, then every later run is silent. See
 [How local.diffthing.dev works](docs/LOCAL_DOMAIN.md).
 
 If DNS or the certificate can't be reached (locked-down networks, air-gapped),
@@ -187,11 +187,12 @@ Detailed invariants: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - WebSocket handshake validates token, origin, and protocol version.
 - Source leaves machine only through agent CLI selected by user.
 - Agent edits are reconciled into same review pipeline as manual edits.
-- `local.diffthing.dev` resolves only to loopback. Its bundled TLS private key
-  is therefore **not secret** — it can only serve HTTPS on a user's own
-  `127.0.0.1`, never authenticate a remote host (the same tradeoff Drizzle
-  Studio makes). The session token and loopback bind remain the real access
-  controls. Details: [docs/LOCAL_DOMAIN.md](docs/LOCAL_DOMAIN.md).
+- `local.diffthing.dev` resolves only to loopback, and its TLS certificate is
+  **generated per install** (cached in `~/.config/diffthing/tls`, key `0600`).
+  No private key ships in releases or source control, so no shared key exists
+  for an attacker to combine with DNS/hosts manipulation. The session token
+  and loopback bind remain the real access controls.
+  Details: [docs/LOCAL_DOMAIN.md](docs/LOCAL_DOMAIN.md).
 
 ## Development
 

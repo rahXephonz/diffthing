@@ -77,9 +77,8 @@ reviews and approves.** Nothing below weakens that.
 13. Distribution breadth: Homebrew tap, `cargo-binstall`, Scoop. All three
     consume the release assets published by item 7.
 14. Docs site and a 60-second demo — the value is not obvious cold.
-15. Certificate-renewal automation for `local.diffthing.dev` (Let's Encrypt is
-    90 days) as a scheduled job, so a release never silently ships an expired
-    cert.
+15. ~~Certificate-renewal automation~~ — obsolete: certificates are now
+    generated per install (no shared cert ships, nothing to renew centrally).
 16. **Connect UX.** Auto-open the browser to the printed URL on start, and use a
     fixed default port (`4983`, falling back if busy) for a stable, bookmarkable
     `https://local.diffthing.dev:4983`. Removes the bare-domain confusion. We will take it
