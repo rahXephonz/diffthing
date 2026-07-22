@@ -128,6 +128,12 @@ async fn main() -> anyhow_lite::Result<()> {
         std::process::exit(1);
     }
 
+    // Fail fast on option-shaped --base values (git argument injection).
+    if let Err(e) = gitio::validate_base(&cli.base) {
+        eprintln!("diffthing: {e}");
+        std::process::exit(1);
+    }
+
     let listener = bind_port(cli.port)?;
     let port = listener.local_addr()?.port();
     let token = gen_token();

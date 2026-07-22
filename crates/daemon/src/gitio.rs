@@ -12,6 +12,19 @@ pub fn is_git_repo(root: &Path) -> bool {
     root.join(".git").exists()
 }
 
+/// Reject base revisions git could parse as command-line options. A
+/// dash-prefixed `--base` value (e.g. `--output=/path`) would otherwise be
+/// consumed by `git diff` as a flag, not a revision — argument injection.
+pub fn validate_base(base: &str) -> std::io::Result<()> {
+    if base.is_empty() || base.starts_with('-') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("invalid --base {base:?}: must be a git revision, not an option"),
+        ));
+    }
+    Ok(())
+}
+
 /// Full diff against `base`, INCLUDING untracked files. Plain `git diff`
 /// only ever sees tracked changes — agents create new files constantly, so
 /// that blind spot means agent-authored files are invisible to review.
@@ -21,18 +34,13 @@ pub fn is_git_repo(root: &Path) -> bool {
 /// against `base`, discard the temp index. Never touches the real
 /// `.git/index` — this stays a read-only operation from the user's POV.
 async fn diff_text(root: &Path, base: &str) -> std::io::Result<String> {
-    let tmp_index = std::env::temp_dir().join(format!(
-        "diffthing-index-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or_default()
-    ));
-
-    let result = diff_text_with_temp_index(root, base, &tmp_index).await;
-    let _ = std::fs::remove_file(&tmp_index);
-    result
+    validate_base(base)?;
+    // tempfile: unique 0700 directory, so the index path inside is neither
+    // predictable nor pre-creatable by another local user (no PID/timestamp
+    // guessing, no TOCTOU). Dropping `tmp` removes dir + index.
+    let tmp = tempfile::Builder::new().prefix("diffthing-index-").tempdir()?;
+    let tmp_index = tmp.path().join("index");
+    diff_text_with_temp_index(root, base, &tmp_index).await
 }
 
 async fn diff_text_with_temp_index(
@@ -52,7 +60,7 @@ async fn diff_text_with_temp_index(
     let out = Command::new("git")
         .current_dir(root)
         .env("GIT_INDEX_FILE", tmp_index)
-        .args(["diff", "--no-color", "--no-ext-diff", "--cached", base])
+        .args(["diff", "--no-color", "--no-ext-diff", "--cached", base, "--"])
         .output()
         .await?;
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
@@ -152,4 +160,23 @@ pub async fn modified_paths(root: &Path) -> std::io::Result<Vec<String>> {
     // -z: NUL-separated records, each "XY <path>". Rename disabled so a
     // record is always a single path (no " -> " to split).
     Ok(text.split('\0').filter(|r| r.len() > 3).map(|r| r[3..].to_string()).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_base;
+
+    #[test]
+    fn validate_base_accepts_revisions() {
+        for ok in ["HEAD", "HEAD~3", "main", "origin/main", "v0.2.1", "abc123"] {
+            assert!(validate_base(ok).is_ok(), "should accept {ok:?}");
+        }
+    }
+
+    #[test]
+    fn validate_base_rejects_option_shaped_input() {
+        for bad in ["", "-x", "--output=/tmp/pwn", "--ext-diff", "-", "--"] {
+            assert!(validate_base(bad).is_err(), "should reject {bad:?}");
+        }
+    }
 }
