@@ -43,7 +43,7 @@ pub struct Session {
     /// Single-writer lock for agent dispatch: only one runner may edit the
     /// working tree at a time. `try_lock` fails fast with BusyWriterLock
     /// rather than queueing — concurrent agents on one tree is not a thing.
-    pub writer: Mutex<()>,
+    pub writer: Arc<Mutex<()>>,
     registry: Registry,
     llm: AnyLlm,
     /// Review-state persistence. `None` when the `.diffthing/` store could
@@ -114,7 +114,7 @@ impl Session {
             state: Mutex::new(Snapshot { walkthrough, files, scores, review }),
             pending: Mutex::new(None),
             events,
-            writer: Mutex::new(()),
+            writer: Arc::new(Mutex::new(())),
             registry,
             llm: llm_client,
             store,

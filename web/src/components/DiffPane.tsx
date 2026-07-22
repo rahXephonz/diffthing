@@ -138,6 +138,17 @@ export default function DiffPane({
     setDraft(k, "");
     closeComposer(k);
   };
+  const submitDraftAndDispatch = (id: string, line: number | null) => {
+    const k = anchorKey(id, line);
+    const text = (drafts[k] ?? "").trim();
+    if (!text) return;
+    // WebSocket preserves send order: the daemon records the human comment
+    // before it starts the anchored agent run.
+    onFlag(id, line, text);
+    onDispatch(id, line, text);
+    setDraft(k, "");
+    closeComposer(k);
+  };
   // Bumped once the langs needed by the current hunks finish loading —
   // tokensFor reads live off highlighter.getLoadedLanguages(), this exists
   // purely to force a re-render when that set changes underneath us.
@@ -383,6 +394,7 @@ export default function DiffPane({
                     draft={drafts[k] ?? ""}
                     onDraftChange={(v) => setDraft(k, v)}
                     onSubmit={() => submitDraft(hunk.id, line)}
+                    onSubmitAndDispatch={() => submitDraftAndDispatch(hunk.id, line)}
                     onResolve={() => onResolve(hunk.id, line)}
                     onDispatch={(instruction) => onDispatch(hunk.id, line, instruction)}
                     onCancel={() => {

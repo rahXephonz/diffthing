@@ -38,7 +38,7 @@ export default function App() {
   const sendRef = useRef<(m: ClientMsg) => void>(() => null);
   const { conn, walkthrough, files, scores, review, pending, selectedStep, progress, dispatch } =
     useStore();
-  const { setConn, onServerMsg, selectStep } = useStore();
+  const { setConn, onServerMsg, selectStep, clearDispatch } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>("unified");
   const [filter, setFilter] = useState("");
 
@@ -441,15 +441,16 @@ export default function App() {
                   sendRef.current({ type: "add_flag", hunk: id, line, comment })
                 }
                 onResolve={(id, line) => sendRef.current({ type: "close_flag", hunk: id, line })}
-                onDispatch={(id, line, instruction) =>
+                onDispatch={(id, line, instruction) => {
+                  clearDispatch();
                   sendRef.current({
                     type: "request_change",
                     hunks: [id],
                     line,
                     instruction,
                     runner: "auto",
-                  })
-                }
+                  });
+                }}
                 flags={review?.flags ?? []}
                 dispatch={dispatch}
                 viewMode={viewMode}
