@@ -16,7 +16,9 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-const PROTOCOL_VERSION: u16 = 5;
+// Must track diffthing_core::protocol::PROTOCOL_VERSION (this is a separate
+// test crate and can't import the daemon bin's const).
+const PROTOCOL_VERSION: u16 = 6;
 const WAIT: Duration = Duration::from_secs(30);
 
 fn git(repo: &Path, args: &[&str]) {
