@@ -1,6 +1,6 @@
 {
   "name": "diffthing",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Local-first diff review for AI-assisted development. AI organizes the diff. Only you review.",
   "keywords": [
     "diff",
