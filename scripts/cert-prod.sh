@@ -55,7 +55,7 @@ if [ ! -f "$_dnsapi" ]; then
   exit 1
 fi
 
-echo "cert-prod: issuing $DOMAIN via $DNS_PROVIDER (DNS-01) using $ACME…"
+echo "cert-prod: issuing ${DOMAIN} via ${DNS_PROVIDER} (DNS-01) using ${ACME}"
 "$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN"
 
 # --install-cert copies the current material to fixed paths and is the
