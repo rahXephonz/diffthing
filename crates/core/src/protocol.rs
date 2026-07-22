@@ -130,5 +130,7 @@ pub enum ErrorCode {
     BadToken,
     ProtocolMismatch,
     BusyWriterLock,
+    /// Client exceeded the per-connection message rate; request was dropped.
+    RateLimited,
     Internal,
 }

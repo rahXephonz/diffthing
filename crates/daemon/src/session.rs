@@ -44,6 +44,10 @@ pub struct Session {
     /// working tree at a time. `try_lock` fails fast with BusyWriterLock
     /// rather than queueing — concurrent agents on one tree is not a thing.
     pub writer: Arc<Mutex<()>>,
+    /// One background LLM organization run at a time. A Regenerate flood
+    /// must not spawn one agent CLI process per click — extra requests are
+    /// dropped while a run is in flight (DoS hardening).
+    organizing: std::sync::atomic::AtomicBool,
     registry: Registry,
     llm: AnyLlm,
     /// Review-state persistence. `None` when the `.diffthing/` store could
@@ -53,6 +57,28 @@ pub struct Session {
 
 fn all_hunks(files: &[FileDiff]) -> Vec<Hunk> {
     files.iter().flat_map(|f| f.hunks.iter().cloned()).collect()
+}
+
+/// Clears the session's `organizing` flag when the spawned task ends, on
+/// every path — success, early return, or panic.
+struct OrganizeGuard(Arc<Session>);
+
+impl Drop for OrganizeGuard {
+    fn drop(&mut self) {
+        self.0.organizing.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Session {
+    /// Claim the single organization slot. Returns None (caller should skip
+    /// spawning) when a run is already in flight.
+    fn try_claim_organize(self: &Arc<Self>) -> Option<OrganizeGuard> {
+        use std::sync::atomic::Ordering;
+        self.organizing
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| OrganizeGuard(Arc::clone(self)))
+    }
 }
 
 impl Session {
@@ -115,6 +141,7 @@ impl Session {
             pending: Mutex::new(None),
             events,
             writer: Arc::new(Mutex::new(())),
+            organizing: std::sync::atomic::AtomicBool::new(false),
             registry,
             llm: llm_client,
             store,
@@ -271,8 +298,10 @@ impl Session {
         if matches!(self.llm, AnyLlm::Noop(_)) {
             return;
         }
+        let Some(guard) = self.try_claim_organize() else { return };
         let session = Arc::clone(self);
         tokio::spawn(async move {
+            let _guard = guard;
             let _ = session.events.send(ServerMsg::GenerationProgress {
                 message: format!("organizing walkthrough via {}", session.llm.describe()),
             });
@@ -317,8 +346,10 @@ impl Session {
         if matches!(self.llm, AnyLlm::Noop(_)) {
             return;
         }
+        let Some(guard) = self.try_claim_organize() else { return };
         let session = Arc::clone(self);
         tokio::spawn(async move {
+            let _guard = guard;
             let (hunks, scores, tree_state, revision, orphan_ids) = {
                 let state = session.state.lock().await;
                 let Some(scope) =
