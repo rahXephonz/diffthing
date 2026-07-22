@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { iconUrlForPath, STATUS_CLASS, STATUS_LETTER } from "../libs/fileIcon";
 import type { FileDiff } from "../libs/protocol";
 import { basename } from "../libs/utils";
-import { Counts } from "./ReviewChrome";
+import { Counts, Highlight } from "./ReviewChrome";
 
 type DirNode = { name: string; path: string; dirs: DirNode[]; files: FileDiff[] };
 
@@ -43,11 +43,13 @@ function togglePath(paths: Set<string>, path: string): Set<string> {
 function FileRow({
   file,
   depth,
+  query,
   selected,
   onSelect,
 }: {
   file: FileDiff;
   depth: number;
+  query: string;
   selected: boolean;
   onSelect: (path: string) => void;
 }) {
@@ -77,7 +79,9 @@ function FileRow({
       >
         {STATUS_LETTER[file.status]}
       </span>
-      <span className="min-w-0 flex-1 truncate text-left">{basename(file.path)}</span>
+      <span className="min-w-0 flex-1 truncate text-left">
+        <Highlight text={basename(file.path)} query={query} />
+      </span>
       <Counts added={totals.added} removed={totals.removed} />
     </button>
   );
@@ -112,7 +116,9 @@ function DirectoryContents({
               onClick={() => onToggle(directory.path)}
             >
               {isClosed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              <span className="truncate">{directory.name}</span>
+              <span className="truncate">
+                <Highlight text={directory.name} query={query} />
+              </span>
             </button>
             {!isClosed && (
               <DirectoryContents
@@ -133,6 +139,7 @@ function DirectoryContents({
           key={file.path}
           file={file}
           depth={depth}
+          query={query}
           selected={selectedPaths.has(file.path)}
           onSelect={onSelectFile}
         />
@@ -163,17 +170,22 @@ export default function FileTreeSection({
   const toggle = (path: string) => setClosed((current) => togglePath(current, path));
 
   return (
-    <section>
+    // The tree is fixed sidebar chrome (it never scrolls away), but a big
+    // diff can't be allowed to crush the scope list below — so the tree
+    // itself scrolls internally past ~a third of the viewport.
+    <section className="shrink-0 flex flex-col min-h-0">
       <h2 className="text-xs uppercase tracking-wider text-muted mb-1">Files</h2>
-      <DirectoryContents
-        node={tree}
-        depth={0}
-        query={query}
-        closedPaths={closed}
-        selectedPaths={selectedPaths}
-        onToggle={toggle}
-        onSelectFile={onSelectFile}
-      />
+      <div className="max-h-[32vh] overflow-y-auto">
+        <DirectoryContents
+          node={tree}
+          depth={0}
+          query={query}
+          closedPaths={closed}
+          selectedPaths={selectedPaths}
+          onToggle={toggle}
+          onSelectFile={onSelectFile}
+        />
+      </div>
     </section>
   );
 }
