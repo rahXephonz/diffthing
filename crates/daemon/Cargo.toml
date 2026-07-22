@@ -22,6 +22,9 @@ axum-server = { version = "0.7", default-features = false, features = ["tls-rust
 # rustls pinned to the ring provider (not aws-lc-rs) so release cross-compiles
 # need no C toolchain.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# Per-install self-signed cert generation (no shared key ships in releases).
+# ring-backed for the same no-C-toolchain reason as rustls above.
+rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
 clap = { version = "=4.4.18", features = ["derive"] }
 notify = "6.1"
 ignore = "=0.4.22"
