@@ -185,7 +185,10 @@ fn schema_json() -> serde_json::Value {
 /// untrusted first lines, so where the CLI can express it, tool use is
 /// disabled outright — organization needs no shell, no edits, no network.
 const KNOWN_AGENTS: &[(&str, &[&str])] = &[
-    ("claude", &["-p", "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch"]),
+    // `--disallowedTools` is variadic in the claude CLI: the space-separated
+    // form swallows every following argument — including the prompt — as
+    // more deny rules. The `=` form binds exactly one value.
+    ("claude", &["-p", "--disallowedTools=Bash,Edit,Write,WebFetch,WebSearch"]),
     ("codex", &["exec"]),
     ("gemini", &["-p"]),
     ("kimi", &["-p"]),

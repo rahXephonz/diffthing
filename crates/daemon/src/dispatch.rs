@@ -37,7 +37,9 @@ use std::time::Duration;
 const RUNNERS: &[(&str, &[&str])] = &[
     (
         "claude",
-        &["-p", "--permission-mode", "acceptEdits", "--disallowedTools", "Bash,WebFetch,WebSearch"],
+        // `=` form: --disallowedTools is variadic and the space-separated
+        // form would swallow the trailing prompt argument as deny rules.
+        &["-p", "--permission-mode", "acceptEdits", "--disallowedTools=Bash,WebFetch,WebSearch"],
     ),
     ("codex", &["exec", "--full-auto"]),
     ("aider", &["--yes", "--no-auto-commits", "--message"]),
