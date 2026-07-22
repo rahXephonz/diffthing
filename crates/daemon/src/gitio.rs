@@ -147,10 +147,15 @@ pub async fn restore_tracked(root: &Path, snapshot_ref: &str) -> std::io::Result
     Ok(())
 }
 
-/// Paths currently modified/added/untracked, per `git status --porcelain`.
-/// Used to bound an agent's blast radius: files it touches that weren't in
-/// scope and weren't already dirty are surfaced as a scope violation.
-pub async fn modified_paths(root: &Path) -> std::io::Result<Vec<String>> {
+/// One `git status --porcelain` record with the tracking split the rollback
+/// planner needs: untracked files can't be restored from a stash snapshot
+/// (stash create never captures them), so they take the quarantine path.
+pub struct StatusPath {
+    pub path: String,
+    pub untracked: bool,
+}
+
+pub async fn status_paths(root: &Path) -> std::io::Result<Vec<StatusPath>> {
     let out = Command::new("git")
         .current_dir(root)
         .args(["status", "--porcelain", "--no-renames", "-z"])
@@ -159,7 +164,73 @@ pub async fn modified_paths(root: &Path) -> std::io::Result<Vec<String>> {
     let text = String::from_utf8_lossy(&out.stdout);
     // -z: NUL-separated records, each "XY <path>". Rename disabled so a
     // record is always a single path (no " -> " to split).
-    Ok(text.split('\0').filter(|r| r.len() > 3).map(|r| r[3..].to_string()).collect())
+    Ok(text
+        .split('\0')
+        .filter(|r| r.len() > 3)
+        .map(|r| StatusPath { path: r[3..].to_string(), untracked: r.starts_with("??") })
+        .collect())
+}
+
+/// Gitignored paths (collapsed: an ignored directory is one entry). Best
+/// effort — a new file inside an already-ignored directory is invisible in
+/// this view, which keeps the listing bounded on big trees (node_modules).
+pub async fn ignored_paths(root: &Path) -> std::io::Result<BTreeSet<String>> {
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain", "--no-renames", "--ignored=traditional", "-z"])
+        .output()
+        .await?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text
+        .split('\0')
+        .filter(|r| r.len() > 3 && r.starts_with("!!"))
+        .map(|r| r[3..].to_string())
+        .collect())
+}
+
+/// Content fingerprints for `paths` (git blob hashes, one invocation).
+/// Missing/unreadable files simply have no entry. Used to catch an agent
+/// editing a file that was ALREADY dirty before it ran — the path-set diff
+/// alone can't see that.
+pub async fn hash_paths(
+    root: &Path,
+    paths: &[String],
+) -> std::io::Result<std::collections::BTreeMap<String, String>> {
+    if paths.is_empty() {
+        return Ok(Default::default());
+    }
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root).args(["hash-object", "--"]);
+    let existing: Vec<&String> = paths.iter().filter(|p| root.join(p).is_file()).collect();
+    if existing.is_empty() {
+        return Ok(Default::default());
+    }
+    for p in &existing {
+        cmd.arg(p);
+    }
+    let out = cmd.output().await?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(existing.iter().map(|p| (*p).clone()).zip(text.lines().map(str::to_string)).collect())
+}
+
+/// Restore specific TRACKED paths from a snapshot ref. Narrow sibling of
+/// `restore_tracked`: rollback for out-of-scope agent edits must not touch
+/// the in-scope work the user asked for.
+pub async fn restore_paths(
+    root: &Path,
+    snapshot_ref: &str,
+    paths: &[String],
+) -> std::io::Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root).args(["checkout", snapshot_ref, "--"]);
+    for p in paths {
+        cmd.arg(p);
+    }
+    cmd.output().await?;
+    Ok(())
 }
 
 #[cfg(test)]
