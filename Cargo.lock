@@ -402,7 +402,7 @@ checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
 name = "diffthing"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "axum",
  "axum-server",
@@ -429,14 +429,14 @@ dependencies = [
 
 [[package]]
 name = "diffthing-analyzers"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "diffthing-core",
 ]
 
 [[package]]
 name = "diffthing-core"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "hex",
  "serde",
