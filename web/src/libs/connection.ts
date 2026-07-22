@@ -77,7 +77,7 @@ export function connect(
         onState({
           kind: "diagnosed",
           diagnosis: "browser_blocked",
-          detail: browserFix(),
+          detail: "The daemon is up, but your browser blocked the local connection.",
         });
         return;
       }
@@ -138,13 +138,70 @@ export function connect(
   };
 }
 
-function browserFix(): string {
-  const ua = navigator.userAgent;
+export type BrowserKind = "safari" | "brave" | "chrome" | "other";
+
+export interface BrowserHelp {
+  kind: BrowserKind;
+  /** Card heading, e.g. "Using Safari?". */
+  label: string;
+  /** Ordered, plain-text remediation steps. Rendered as a list. */
+  steps: string[];
+}
+
+/** Best-effort browser identification for the connection-help card. */
+export function detectBrowser(): BrowserKind {
   // Brave hides itself in the UA; feature-detect via navigator.brave.
-  const isBrave = "brave" in navigator;
-  if (isBrave)
-    return "Brave is blocking localhost. Click the Brave shield icon and turn Shields off for this site — or run `npx diffthing --offline`.";
-  if (ua.includes("Safari") && !ua.includes("Chrome"))
-    return "Safari blocks localhost from HTTPS pages. Run `npx diffthing --offline` and open the printed 127.0.0.1 URL instead.";
-  return "Your browser blocked local network access. Open Site information in the URL bar and enable Local network access — or run `npx diffthing --offline`.";
+  if ("brave" in navigator) return "brave";
+  const ua = navigator.userAgent;
+  if (ua.includes("Safari") && !ua.includes("Chrome")) return "safari";
+  if (ua.includes("Chrome") || ua.includes("Chromium")) return "chrome";
+  return "other";
+}
+
+/**
+ * Per-browser steps for the "your browser blocked localhost" case, mirroring
+ * the Drizzle Studio onboarding. `--offline` is the universal escape hatch.
+ */
+export function browserHelp(): BrowserHelp {
+  switch (detectBrowser()) {
+    case "brave":
+      return {
+        kind: "brave",
+        label: "Using Brave?",
+        steps: [
+          "Click the Brave shield icon in the address bar.",
+          "Turn Shields down for this site, then reload.",
+          "Still blocked? Run `npx diffthing --offline`.",
+        ],
+      };
+    case "safari":
+      return {
+        kind: "safari",
+        label: "Using Safari?",
+        steps: [
+          "Safari blocks self-signed localhost certs.",
+          "Run `npx diffthing --offline` and open the printed 127.0.0.1 URL.",
+          "Or trust the daemon cert (see certs/README) and reload.",
+        ],
+      };
+    case "chrome":
+      return {
+        kind: "chrome",
+        label: "Using Chrome?",
+        steps: [
+          "Open Site information in the address bar.",
+          'Enable "Local network access", then reload.',
+          "Still blocked? Run `npx diffthing --offline`.",
+        ],
+      };
+    default:
+      return {
+        kind: "other",
+        label: "Browser blocked the connection",
+        steps: [
+          "Allow local network access for this site, then reload.",
+          "Or run `npx diffthing --offline` for the plain-HTTP path.",
+        ],
+      };
+  }
 }

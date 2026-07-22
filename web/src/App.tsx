@@ -4,7 +4,7 @@ import ReviewContent from "./components/ReviewContent";
 import { Kbd } from "./components/ReviewChrome";
 import ReviewSidebar from "./components/ReviewSidebar";
 import type { ViewMode } from "./components/DiffPane";
-import { connect, parseFragment } from "./libs/connection";
+import { browserHelp, connect, parseFragment } from "./libs/connection";
 import { preloadIconForPath } from "./libs/fileIcon";
 import type { ClientMsg, Step } from "./libs/protocol";
 import { useStore } from "./libs/store";
@@ -130,9 +130,15 @@ export default function App() {
     });
   }, [files]);
 
+  const daemonPort = parseFragment(location.hash).port;
+
   if (conn.kind === "connecting" || conn.kind === "probing") {
     return (
-      <Landing tone="wait" status={conn.kind === "connecting" ? "Connecting…" : "Diagnosing…"}>
+      <Landing
+        tone="wait"
+        status={conn.kind === "connecting" ? "Connecting…" : "Diagnosing…"}
+        daemonPort={daemonPort}
+      >
         <p>
           Reviewing changes on your machine. If this hangs, make sure the daemon is still running in
           your project.
@@ -141,12 +147,17 @@ export default function App() {
     );
   }
   if (conn.kind === "diagnosed") {
+    // A browser-blocked connection is the one case with per-browser steps;
+    // everything else (daemon down, protocol skew) just shows the detail.
+    const help = conn.diagnosis === "browser_blocked" ? browserHelp() : null;
     return (
-      <Landing tone="error" status="Not connected">
+      <Landing tone="error" status="Not connected" daemonPort={daemonPort} help={help}>
         <p>{conn.detail}</p>
-        <p className="text-subtle">
-          Or run <Kbd>npx diffthing --offline</Kbd> to serve this UI directly from 127.0.0.1.
-        </p>
+        {!help && (
+          <p className="text-subtle">
+            Or run <Kbd>npx diffthing --offline</Kbd> to serve this UI directly from 127.0.0.1.
+          </p>
+        )}
       </Landing>
     );
   }
