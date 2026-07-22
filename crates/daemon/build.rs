@@ -1,11 +1,12 @@
 //! Build-time detection of the bundled `local.diffthing.dev` TLS material.
 //!
 //! Drizzle-style flow: when a real, publicly-trusted cert for the loopback
-//! hostname is committed under `certs/`, embed it so every prebuilt binary
-//! serves trusted TLS (Safari/Brave/Chrome load zero-prompt). When it is
-//! absent — the default for contributors without the private key — the cfg
-//! stays off and `tls.rs` falls back to per-install self-signed material, so
-//! the crate always compiles.
+//! hostname is present under `certs/`, embed it so every prebuilt binary serves
+//! trusted TLS (Safari/Brave/Chrome load zero-prompt). The files are gitignored
+//! — releases write them from CI secrets, local builds get them from
+//! `scripts/cert-prod.sh`. When absent (forks, PRs, contributors without the
+//! key) the cfg stays off and `tls.rs` falls back to per-install self-signed
+//! material, so the crate always compiles.
 
 use std::path::Path;
 

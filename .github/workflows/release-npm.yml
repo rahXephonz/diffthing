@@ -66,6 +66,26 @@ jobs:
       - name: Build web UI
         run: pnpm web:build
 
+      # Write the bundled trusted cert for local.diffthing.dev from repo
+      # secrets so build.rs embeds it (bundled_cert cfg). The private key never
+      # lives in git — only here, masked, at build time. Absent secrets (forks,
+      # PRs) => no files => build.rs falls back to self-signed, which still
+      # compiles. See crates/daemon/certs/README.md.
+      - name: Write bundled TLS cert
+        env:
+          DIFFTHING_TLS_CERT: ${{ secrets.DIFFTHING_TLS_CERT }}
+          DIFFTHING_TLS_KEY: ${{ secrets.DIFFTHING_TLS_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$DIFFTHING_TLS_CERT" ] || [ -z "$DIFFTHING_TLS_KEY" ]; then
+            echo "no TLS cert secrets set — build.rs falls back to self-signed"
+            exit 0
+          fi
+          mkdir -p crates/daemon/certs
+          printf '%s' "$DIFFTHING_TLS_CERT" > crates/daemon/certs/local.diffthing.dev.pem
+          printf '%s' "$DIFFTHING_TLS_KEY"  > crates/daemon/certs/local.diffthing.dev.key.pem
+          chmod 600 crates/daemon/certs/local.diffthing.dev.key.pem
+
       - name: Install cross
         if: matrix.cross
         run: cargo install cross --locked

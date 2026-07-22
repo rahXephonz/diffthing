@@ -6,10 +6,11 @@
 //!   1. **Env override** (`DIFFTHING_TLS_CERT` / `DIFFTHING_TLS_KEY`) — bring
 //!      your own material, e.g. an mkcert pair for local testing.
 //!   2. **Bundled trusted cert** — when a real, CA-trusted cert for
-//!      `local.diffthing.dev` is committed under `certs/`, `build.rs` sets the
-//!      `bundled_cert` cfg and we `include_bytes!` it. Browsers load
-//!      zero-prompt (the Drizzle Studio model). This is the default in
-//!      published releases.
+//!      `local.diffthing.dev` is present under `certs/` (gitignored; written
+//!      from CI secrets in releases, from `scripts/cert-prod.sh` locally),
+//!      `build.rs` sets the `bundled_cert` cfg and we `include_bytes!` it.
+//!      Browsers load zero-prompt (the Drizzle Studio model). This is the
+//!      default in published releases.
 //!   3. **Per-install self-signed** — generated on first run and cached in the
 //!      user's config dir (`~/.config/diffthing/tls`) when no bundled cert is
 //!      present (contributor builds without the private key). Browsers show a

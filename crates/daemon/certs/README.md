@@ -1,7 +1,7 @@
 # Bundled TLS material for `local.diffthing.dev`
 
-Drop the real, publicly-trusted certificate here to enable the zero-prompt
-HTTPS flow (Drizzle Studio model). Two files, PEM:
+The real, publicly-trusted certificate enables the zero-prompt HTTPS flow
+(Drizzle Studio model). Two files, PEM:
 
 - `local.diffthing.dev.pem` — full chain (leaf + intermediates)
 - `local.diffthing.dev.key.pem` — private key
@@ -10,23 +10,43 @@ HTTPS flow (Drizzle Studio model). Two files, PEM:
 `include_bytes!`s them and serves them by default. When absent, the daemon
 falls back to a per-install self-signed cert, so the crate always builds.
 
-## Obtaining the cert
+**These files are gitignored and MUST NOT be committed.** The private key still
+ships inside the compiled binary (unavoidable — the daemon serves it), but it is
+kept out of the public git history: in releases it is written here from CI
+secrets; locally it comes from `scripts/cert-prod.sh`. Committing it to the
+public repo adds no capability (the binary already carries it) but invites
+secret-scanner detection and CA revocation, which would break every shipped
+binary.
+
+## Issuing the cert (maintainer)
 
 `local.diffthing.dev` resolves to `127.0.0.1` via public DNS. Issue a cert for
-that name against a public CA — Let's Encrypt via a DNS-01 challenge (no inbound
-port needed since the name is loopback). Use the helper, which issues and drops
-both files here in one step (and is renew-safe for the ~90-day rotation):
+that name against a public CA via a DNS-01 challenge (no inbound port needed
+since the name is loopback). The helper issues and drops both files here
+(gitignored), renew-safe for the ~90-day rotation:
 
 ```
-DNS_PROVIDER=dns_cf ./scripts/cert-prod.sh    # provider creds via acme.sh env
+DNS_PROVIDER=dns_cf ./scripts/cert-prod.sh    # DNS for diffthing.dev is Cloudflare
 ```
 
-Prereqs: `acme.sh` installed and your DNS provider's API credentials exported
-(see the acme.sh dnsapi wiki). Also make sure an `A` record
-`local.diffthing.dev → 127.0.0.1` exists so users actually reach loopback.
+Prereqs: `acme.sh` installed, Cloudflare API creds exported (`CF_Token`,
+`CF_Account_ID`). Ensure an `A` record `local.diffthing.dev → 127.0.0.1` exists.
 
-After it runs: `cargo build -p diffthing` (turns on `bundled_cert`), then commit
-the two files and cut a release.
+## Shipping it (CI secrets)
+
+Store the material as repo secrets so the release workflow embeds it without
+ever committing it:
+
+```
+gh secret set DIFFTHING_TLS_CERT < crates/daemon/certs/local.diffthing.dev.pem
+gh secret set DIFFTHING_TLS_KEY  < crates/daemon/certs/local.diffthing.dev.key.pem
+```
+
+`.github/workflows/release-npm.yml` writes them into this directory before
+`cargo build`. On rotation, re-run the helper and update both secrets.
+
+For local testing, `cargo build -p diffthing` picks up the gitignored files
+directly (turns on `bundled_cert`).
 
 ## Security tradeoff (accepted)
 
