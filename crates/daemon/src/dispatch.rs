@@ -60,14 +60,96 @@ fn resolve_runner(
     }
 }
 
-/// Files the agent touched that were neither in scope nor already dirty
-/// before it ran — its out-of-scope blast radius. Pure so it's testable.
-fn scope_violations(
-    scope: &BTreeSet<String>,
-    pre: &BTreeSet<String>,
-    post: &BTreeSet<String>,
-) -> Vec<String> {
-    post.difference(pre).filter(|p| !scope.contains(*p)).cloned().collect()
+/// Working-tree facts captured before/after an agent run, for the rollback
+/// planner. `hashes` fingerprints out-of-scope files that were ALREADY dirty
+/// before the run — the path-set diff alone can't see the agent editing
+/// those.
+pub struct TreeFacts {
+    pub dirty: BTreeSet<String>,
+    pub untracked: BTreeSet<String>,
+    pub ignored: BTreeSet<String>,
+    pub hashes: std::collections::BTreeMap<String, String>,
+}
+
+/// What to do about each out-of-scope change the agent made. Every violation
+/// lands in exactly one bucket — nothing is left silently in the worktree.
+#[derive(Default, Debug, PartialEq)]
+pub struct RollbackPlan {
+    /// Tracked paths restored from the pre-run snapshot (`git checkout`).
+    pub restore: Vec<String>,
+    /// Agent-created files git can't restore-over (untracked or newly
+    /// ignored): moved out of the worktree into `.diffthing/quarantine`.
+    pub quarantine: Vec<String>,
+    /// Pre-existing UNTRACKED files the agent modified. Their original
+    /// content was never snapshotted (stash create skips untracked), so we
+    /// can neither restore nor safely remove them — surfaced to the human.
+    pub unrestorable: Vec<String>,
+}
+
+impl RollbackPlan {
+    pub fn is_empty(&self) -> bool {
+        self.restore.is_empty() && self.quarantine.is_empty() && self.unrestorable.is_empty()
+    }
+
+    pub fn violation_count(&self) -> usize {
+        self.restore.len() + self.quarantine.len() + self.unrestorable.len()
+    }
+}
+
+/// Classify every out-of-scope change between two tree states. Pure so it's
+/// testable. Covers: newly dirty files, deletions, agent edits to files that
+/// were already dirty (hash mismatch), and newly created ignored files.
+fn plan_rollback(scope: &BTreeSet<String>, pre: &TreeFacts, post: &TreeFacts) -> RollbackPlan {
+    let mut plan = RollbackPlan::default();
+
+    // Files that became dirty during the run (created, modified, deleted).
+    for path in post.dirty.difference(&pre.dirty) {
+        if scope.contains(path) {
+            continue;
+        }
+        if post.untracked.contains(path) {
+            plan.quarantine.push(path.clone()); // agent-created, never existed
+        } else {
+            plan.restore.push(path.clone()); // tracked: snapshot has the truth
+        }
+    }
+
+    // Files dirty BEFORE the run whose content the agent changed anyway.
+    for path in pre.dirty.intersection(&post.dirty) {
+        if scope.contains(path) {
+            continue;
+        }
+        let (Some(before), Some(after)) = (pre.hashes.get(path), post.hashes.get(path)) else {
+            continue; // deleted mid-run: already covered by the dirty diff
+        };
+        if before == after {
+            continue;
+        }
+        if pre.untracked.contains(path) {
+            plan.unrestorable.push(path.clone()); // no snapshot to restore from
+        } else {
+            plan.restore.push(path.clone()); // stash create captured pre content
+        }
+    }
+
+    // Ignored files the agent created (collapsed-dir view; best effort).
+    for path in post.ignored.difference(&pre.ignored) {
+        if !scope.contains(path) {
+            plan.quarantine.push(path.clone());
+        }
+    }
+
+    plan
+}
+
+/// Move a quarantined file under `.diffthing/quarantine/<job_id>/`, keeping
+/// its relative path. The content stays inspectable but leaves the worktree.
+fn quarantine_file(repo: &std::path::Path, job_id: &str, rel: &str) -> std::io::Result<()> {
+    let dest = repo.join(".diffthing").join("quarantine").join(job_id).join(rel);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::rename(repo.join(rel), dest)
 }
 
 /// The agent's own summary of what it changed. We ask it to end with a
@@ -164,6 +246,41 @@ Never claim a change you did not make. Do not assess whether code is good.\n",
     p
 }
 
+/// Capture the tree facts the rollback planner compares. Hashes only
+/// out-of-scope dirty files — in-scope edits are the point of the dispatch.
+async fn tree_facts(repo: &std::path::Path, scope: &BTreeSet<String>) -> TreeFacts {
+    let status = gitio::status_paths(repo).await.unwrap_or_default();
+    let dirty: BTreeSet<String> = status.iter().map(|s| s.path.clone()).collect();
+    let untracked: BTreeSet<String> =
+        status.iter().filter(|s| s.untracked).map(|s| s.path.clone()).collect();
+    let ignored = gitio::ignored_paths(repo).await.unwrap_or_default();
+    let to_hash: Vec<String> = dirty.iter().filter(|p| !scope.contains(*p)).cloned().collect();
+    let hashes = gitio::hash_paths(repo, &to_hash).await.unwrap_or_default();
+    TreeFacts { dirty, untracked, ignored, hashes }
+}
+
+/// Human-readable account of what the rollback did — attached to the review
+/// thread so nothing about the violation is hidden.
+fn violation_note(plan: &RollbackPlan) -> String {
+    let mut parts = Vec::new();
+    if !plan.restore.is_empty() {
+        parts.push(format!("reverted out-of-scope edits: {}", plan.restore.join(", ")));
+    }
+    if !plan.quarantine.is_empty() {
+        parts.push(format!(
+            "quarantined agent-created files (.diffthing/quarantine): {}",
+            plan.quarantine.join(", ")
+        ));
+    }
+    if !plan.unrestorable.is_empty() {
+        parts.push(format!(
+            "could NOT restore pre-existing untracked files — review manually: {}",
+            plan.unrestorable.join(", ")
+        ));
+    }
+    format!("⚠ scope violation — {}", parts.join("; "))
+}
+
 /// A flagged hunk's context for the prompt, gathered under the state lock.
 struct FlaggedHunk {
     path: String,
@@ -252,8 +369,7 @@ pub fn spawn(
         }
 
         let snapshot = gitio::snapshot(&session.repo).await.ok().flatten();
-        let pre: BTreeSet<String> =
-            gitio::modified_paths(&session.repo).await.unwrap_or_default().into_iter().collect();
+        let pre = tree_facts(&session.repo, &scope).await;
         let pre_tree = gitio::tree_state(&session.repo, &session.base).await.ok();
 
         let _ = session.events.send(status(
@@ -311,14 +427,31 @@ pub fn spawn(
 
         let stdout = String::from_utf8_lossy(&out.stdout);
 
-        let post: BTreeSet<String> =
-            gitio::modified_paths(&session.repo).await.unwrap_or_default().into_iter().collect();
+        let post = tree_facts(&session.repo, &scope).await;
         let post_tree = gitio::tree_state(&session.repo, &session.base).await.ok();
         let changed_tree =
             matches!((&pre_tree, &post_tree), (Some(before), Some(after)) if before != after);
         let answer =
             if changed_tree { extract_summary(&stdout) } else { extract_response(&stdout) };
-        let out_of_scope = scope_violations(&scope, &pre, &post);
+
+        // Out-of-scope changes are rolled back BEFORE results are announced —
+        // a violation must never linger silently in the worktree waiting to
+        // be committed alongside legitimate work.
+        let plan = plan_rollback(&scope, &pre, &post);
+        let mut rollback_failures = Vec::new();
+        if !plan.restore.is_empty() {
+            // snapshot None = tree was fully clean pre-run, so HEAD is the
+            // correct restore point for anything the agent dirtied.
+            let snap_ref = snapshot.clone().unwrap_or_else(|| "HEAD".into());
+            if let Err(e) = gitio::restore_paths(&session.repo, &snap_ref, &plan.restore).await {
+                rollback_failures.push(format!("revert failed ({e})"));
+            }
+        }
+        for path in &plan.quarantine {
+            if let Err(e) = quarantine_file(&session.repo, &job_id, path) {
+                rollback_failures.push(format!("quarantine of {path} failed ({e})"));
+            }
+        }
 
         // Record the agent's claim on every dispatched flag. This is a
         // CLAIM entry — reconcile independently flips addressed_claim when
@@ -338,12 +471,12 @@ pub fn spawn(
                         answer.clone(),
                         rev,
                     );
-                    if !out_of_scope.is_empty() {
-                        f.push(
-                            FlagEntryKind::DispatchNote,
-                            format!("⚠ agent also touched: {}", out_of_scope.join(", ")),
-                            rev,
-                        );
+                    if !plan.is_empty() {
+                        let mut note = violation_note(&plan);
+                        if !rollback_failures.is_empty() {
+                            note.push_str(&format!("; {}", rollback_failures.join("; ")));
+                        }
+                        f.push(FlagEntryKind::DispatchNote, note, rev);
                     }
                 }
             }
@@ -362,12 +495,17 @@ pub fn spawn(
         // so they survive a restart before the reviewer closes them.
         session.persist().await;
 
-        let (final_status, detail) = if out_of_scope.is_empty() {
+        let (final_status, detail) = if plan.is_empty() {
             (JobStatus::Done, answer)
         } else {
+            let outcome = if plan.unrestorable.is_empty() && rollback_failures.is_empty() {
+                "rolled back"
+            } else {
+                "partially rolled back — see the review thread"
+            };
             (
                 JobStatus::ScopeViolation,
-                format!("{answer} — but also modified {} unflagged file(s)", out_of_scope.len()),
+                format!("{answer} — {} out-of-scope change(s) {outcome}", plan.violation_count()),
             )
         };
         let _ = session.events.send(status(&job_id, final_status, Some(detail)));
@@ -382,29 +520,113 @@ mod tests {
         items.iter().map(|s| s.to_string()).collect()
     }
 
+    fn facts(
+        dirty: &[&str],
+        untracked: &[&str],
+        ignored: &[&str],
+        hashes: &[(&str, &str)],
+    ) -> TreeFacts {
+        TreeFacts {
+            dirty: set(dirty),
+            untracked: set(untracked),
+            ignored: set(ignored),
+            hashes: hashes.iter().map(|(p, h)| (p.to_string(), h.to_string())).collect(),
+        }
+    }
+
     #[test]
     fn scope_ok_when_only_flagged_files_change() {
         let scope = set(&["a.ts"]);
-        let pre = set(&["a.ts", "b.ts"]);
-        let post = set(&["a.ts", "b.ts"]);
-        assert!(scope_violations(&scope, &pre, &post).is_empty());
+        let pre = facts(&["a.ts", "b.ts"], &[], &[], &[("b.ts", "h1")]);
+        let post = facts(&["a.ts", "b.ts"], &[], &[], &[("b.ts", "h1")]);
+        assert!(plan_rollback(&scope, &pre, &post).is_empty());
     }
 
     #[test]
-    fn scope_violation_flags_newly_touched_out_of_scope_file() {
+    fn new_tracked_out_of_scope_edit_is_restored() {
         let scope = set(&["a.ts"]);
-        let pre = set(&["a.ts"]);
-        let post = set(&["a.ts", "unrelated.ts"]);
-        assert_eq!(scope_violations(&scope, &pre, &post), vec!["unrelated.ts".to_string()]);
+        let pre = facts(&["a.ts"], &[], &[], &[]);
+        let post = facts(&["a.ts", "unrelated.ts"], &[], &[], &[("unrelated.ts", "h2")]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert_eq!(plan.restore, vec!["unrelated.ts".to_string()]);
+        assert!(plan.quarantine.is_empty());
+        assert!(plan.unrestorable.is_empty());
     }
 
     #[test]
-    fn already_dirty_out_of_scope_file_is_not_a_violation() {
-        // It was dirty before the agent ran — not the agent's doing.
+    fn agent_created_untracked_file_is_quarantined() {
         let scope = set(&["a.ts"]);
-        let pre = set(&["a.ts", "already.ts"]);
-        let post = set(&["a.ts", "already.ts"]);
-        assert!(scope_violations(&scope, &pre, &post).is_empty());
+        let pre = facts(&["a.ts"], &[], &[], &[]);
+        let post = facts(&["a.ts", "new.ts"], &["new.ts"], &[], &[("new.ts", "h3")]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert!(plan.restore.is_empty());
+        assert_eq!(plan.quarantine, vec!["new.ts".to_string()]);
+    }
+
+    #[test]
+    fn untouched_pre_dirty_out_of_scope_file_is_not_a_violation() {
+        // Dirty before the agent ran, same content after — not its doing.
+        let scope = set(&["a.ts"]);
+        let pre = facts(&["a.ts", "already.ts"], &[], &[], &[("already.ts", "same")]);
+        let post = facts(&["a.ts", "already.ts"], &[], &[], &[("already.ts", "same")]);
+        assert!(plan_rollback(&scope, &pre, &post).is_empty());
+    }
+
+    #[test]
+    fn edited_pre_dirty_tracked_file_is_restored() {
+        // Path set identical pre/post — only the content hash catches this.
+        let scope = set(&["a.ts"]);
+        let pre = facts(&["a.ts", "already.ts"], &[], &[], &[("already.ts", "before")]);
+        let post = facts(&["a.ts", "already.ts"], &[], &[], &[("already.ts", "after")]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert_eq!(plan.restore, vec!["already.ts".to_string()]);
+    }
+
+    #[test]
+    fn edited_pre_existing_untracked_file_is_surfaced_not_touched() {
+        // No snapshot ever captured its original content: flag, don't delete.
+        let scope = set(&["a.ts"]);
+        let pre = facts(&["a.ts", "notes.txt"], &["notes.txt"], &[], &[("notes.txt", "before")]);
+        let post = facts(&["a.ts", "notes.txt"], &["notes.txt"], &[], &[("notes.txt", "after")]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert!(plan.restore.is_empty());
+        assert!(plan.quarantine.is_empty());
+        assert_eq!(plan.unrestorable, vec!["notes.txt".to_string()]);
+    }
+
+    #[test]
+    fn new_ignored_file_is_quarantined() {
+        let scope = set(&["a.ts"]);
+        let pre = facts(&["a.ts"], &[], &["target/"], &[]);
+        let post = facts(&["a.ts"], &[], &["target/", "secrets.env"], &[]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert_eq!(plan.quarantine, vec!["secrets.env".to_string()]);
+    }
+
+    #[test]
+    fn quarantine_moves_file_out_of_worktree_preserving_relative_path() {
+        let repo = std::env::temp_dir()
+            .join(format!("diffthing-quarantine-test-{:08x}", rand::random::<u32>()));
+        std::fs::create_dir_all(repo.join("src")).unwrap();
+        std::fs::write(repo.join("src/evil.ts"), "payload").unwrap();
+
+        quarantine_file(&repo, "job-abc", "src/evil.ts").unwrap();
+
+        assert!(!repo.join("src/evil.ts").exists(), "file must leave the worktree");
+        let moved = repo.join(".diffthing/quarantine/job-abc/src/evil.ts");
+        assert_eq!(std::fs::read_to_string(moved).unwrap(), "payload");
+
+        std::fs::remove_dir_all(&repo).ok();
+    }
+
+    #[test]
+    fn deleted_out_of_scope_tracked_file_is_restored() {
+        // Deletion makes the path dirty; it isn't untracked, so restore.
+        let scope = set(&["a.ts"]);
+        let pre = facts(&["a.ts"], &[], &[], &[]);
+        let post = facts(&["a.ts", "gone.ts"], &[], &[], &[]);
+        let plan = plan_rollback(&scope, &pre, &post);
+        assert_eq!(plan.restore, vec!["gone.ts".to_string()]);
     }
 
     #[test]
