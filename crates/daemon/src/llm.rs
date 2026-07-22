@@ -240,7 +240,10 @@ fn detect_running_agent() -> Option<&'static str> {
             })
         })
         .collect();
-    (running.len() == 1).then_some(running[0])
+    match running.as_slice() {
+        [only] => Some(*only),
+        _ => None,
+    }
 }
 
 /// Active session/process agent, otherwise first installed agent CLI.
