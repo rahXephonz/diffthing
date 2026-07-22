@@ -10,9 +10,10 @@
 use crate::session::Session;
 use crate::{hosted_origin, DAEMON_VERSION};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
-use axum::response::IntoResponse;
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
@@ -60,7 +61,8 @@ pub async fn serve(
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
         .with_state(AppState { session, port })
-        .fallback(get(serve_asset));
+        .fallback(get(serve_asset))
+        .layer(axum::middleware::from_fn(security_headers));
 
     listener.set_nonblocking(true)?;
     match mode {
@@ -76,23 +78,67 @@ pub async fn serve(
     Ok(())
 }
 
+/// Baseline browser protections on every response (defense in depth — the
+/// daemon serves only its own embedded SPA, so the policy can be strict).
+/// `connect-src` lists the WS origins explicitly: CSP3 lets `'self'` match
+/// same-origin ws/wss, but Safari historically does not, and the SPA always
+/// dials `location.host` — hosted TLS or loopback.
+const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+     img-src 'self' data:; font-src 'self'; \
+     connect-src 'self' wss://local.diffthing.dev:* ws://127.0.0.1:* ws://localhost:*; \
+     object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+async fn security_headers(req: Request, next: Next) -> Response {
+    let mut resp = next.run(req).await;
+    let h = resp.headers_mut();
+    h.insert("content-security-policy", HeaderValue::from_static(CSP));
+    h.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    h.insert("x-frame-options", HeaderValue::from_static("DENY"));
+    h.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
+    resp
+}
+
+/// Origin policy, shared by `/health` and `/ws`:
+///   - ABSENT header  = non-browser client (curl, scripts) — allowed, the
+///     session token still gates everything that matters.
+///   - PRESENT header = must be UTF-8 AND allowlisted. A malformed value
+///     must never fall through to the more permissive "absent" branch.
+enum OriginCheck {
+    Absent,
+    Allowed(String),
+    Denied,
+}
+
+fn check_origin(headers: &HeaderMap, port: u16) -> OriginCheck {
+    match headers.get("origin") {
+        None => OriginCheck::Absent,
+        Some(v) => match v.to_str() {
+            Ok(o) if origin_allowed(o, port) => OriginCheck::Allowed(o.to_string()),
+            _ => OriginCheck::Denied,
+        },
+    }
+}
+
 /// Probe endpoint for the SPA's connection diagnosis: if this answers but
 /// the WS fails, the problem is the browser (shields/PNA), not the daemon.
 /// CORS-gated the same as `/ws`: the hosted SPA and an offline-mode tab are
 /// both cross-origin from the daemon's own port, so a plain fetch needs the
 /// allowlisted origin echoed back or the browser drops the response.
 async fn health(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let origin = match check_origin(&headers, state.port) {
+        OriginCheck::Denied => return StatusCode::FORBIDDEN.into_response(),
+        OriginCheck::Absent => None,
+        OriginCheck::Allowed(o) => Some(o),
+    };
     let mut resp = axum::Json(serde_json::json!({
         "ok": true,
         "daemon": DAEMON_VERSION,
         "protocol": PROTOCOL_VERSION,
     }))
     .into_response();
-    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        if origin_allowed(origin, state.port) {
-            if let Ok(v) = HeaderValue::from_str(origin) {
-                resp.headers_mut().insert(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
-            }
+    if let Some(origin) = origin {
+        if let Ok(v) = HeaderValue::from_str(&origin) {
+            resp.headers_mut().insert(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
         }
     }
     resp
@@ -147,13 +193,8 @@ async fn ws_upgrade(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    // Non-browser clients (curl) send no Origin; allow — token still gates.
-    let allowed = match headers.get("origin").and_then(|v| v.to_str().ok()) {
-        Some(o) => origin_allowed(o, state.port),
-        None => true,
-    };
-    if !allowed {
-        return axum::http::StatusCode::FORBIDDEN.into_response();
+    if matches!(check_origin(&headers, state.port), OriginCheck::Denied) {
+        return StatusCode::FORBIDDEN.into_response();
     }
     ws.on_upgrade(move |socket| handle_ws(socket, state.session)).into_response()
 }
