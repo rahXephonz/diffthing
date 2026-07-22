@@ -180,6 +180,13 @@ async fn main() -> anyhow_lite::Result<()> {
 
     println!();
     println!("  open  {url}");
+    // Self-signed fallback: Safari refuses it entirely. Point those users at
+    // the loopback-HTTP path instead of a dead page.
+    if hosted && !tls::is_trusted() {
+        println!(
+            "  note  self-signed cert — Safari can't open this; use `npx diffthing --offline`"
+        );
+    }
     println!();
 
     server::serve(listener, session, mode).await

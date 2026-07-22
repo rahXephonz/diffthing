@@ -1,16 +1,27 @@
 //! TLS material for the `local.diffthing.dev` HTTPS flow.
 //!
-//! Per-install certificate: generated on first hosted-mode run and cached in
-//! the user's config dir (`~/.config/diffthing/tls`). No private key ever
-//! ships in the binary or the repository — a shared key would let anyone who
-//! can bend DNS / hosts resolution for `local.diffthing.dev` serve trusted
-//! JavaScript under that name and read the fragment session token.
+//! The daemon serves this name (public DNS → loopback) over HTTPS. Three ways
+//! to get a cert, in order of preference:
 //!
-//! The self-signed cert covers `local.diffthing.dev` (public DNS → loopback),
-//! `localhost`, and `127.0.0.1`. Browsers show a trust prompt once per
-//! install; `--offline` (plain HTTP on loopback, itself a secure context)
-//! remains the zero-prompt path. Override with `DIFFTHING_TLS_CERT` /
-//! `DIFFTHING_TLS_KEY` to serve your own material instead.
+//!   1. **Env override** (`DIFFTHING_TLS_CERT` / `DIFFTHING_TLS_KEY`) — bring
+//!      your own material, e.g. an mkcert pair for local testing.
+//!   2. **Bundled trusted cert** — when a real, CA-trusted cert for
+//!      `local.diffthing.dev` is present under `certs/` (gitignored; written
+//!      from CI secrets in releases, from `scripts/cert-prod.sh` locally),
+//!      `build.rs` sets the `bundled_cert` cfg and we `include_bytes!` it.
+//!      Browsers load zero-prompt (the Drizzle Studio model). This is the
+//!      default in published releases.
+//!   3. **Per-install self-signed** — generated on first run and cached in the
+//!      user's config dir (`~/.config/diffthing/tls`) when no bundled cert is
+//!      present (contributor builds without the private key). Browsers show a
+//!      trust prompt once; Safari refuses it outright — hence the bundled cert.
+//!
+//! Security tradeoff of (2): shipping the private key lets anyone who can bend
+//! a victim's DNS / hosts resolution for `local.diffthing.dev` serve trusted
+//! JavaScript under that name and read the fragment session token. Accepted
+//! because it requires already controlling the victim's name resolution and the
+//! token is ephemeral per run. `--offline` (plain HTTP on loopback, itself a
+//! secure context) remains the zero-shared-trust path. See `certs/README.md`.
 
 use std::env;
 use std::fs;
@@ -21,13 +32,43 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 /// A PEM certificate chain paired with its private key.
 pub type PemPair = (Vec<u8>, Vec<u8>);
 
+/// PEM cert chain committed under `certs/`, embedded when `build.rs` finds it.
+#[cfg(bundled_cert)]
+const BUNDLED_CERT: &[u8] = include_bytes!("../certs/local.diffthing.dev.pem");
+#[cfg(bundled_cert)]
+const BUNDLED_KEY: &[u8] = include_bytes!("../certs/local.diffthing.dev.key.pem");
+
+/// The bundled trusted pair, present only when a real cert was committed.
+#[cfg(bundled_cert)]
+fn bundled() -> Option<PemPair> {
+    Some((BUNDLED_CERT.to_vec(), BUNDLED_KEY.to_vec()))
+}
+#[cfg(not(bundled_cert))]
+fn bundled() -> Option<PemPair> {
+    None
+}
+
+/// True when the served cert is a genuinely trusted bundled one (no browser
+/// trust prompt). Drives the boot messaging: only the self-signed path warns.
+pub fn is_trusted() -> bool {
+    if env::var_os("DIFFTHING_TLS_CERT").is_some() && env::var_os("DIFFTHING_TLS_KEY").is_some() {
+        // Caller-provided material: assume they know what they mounted.
+        return true;
+    }
+    bundled().is_some()
+}
+
 /// The cert + key to serve, in order of preference:
 ///   1. the env-provided pair, if both are set
-///   2. the cached per-install pair
-///   3. freshly generated self-signed material, persisted for next boot
+///   2. the bundled trusted pair, if compiled in
+///   3. the cached per-install self-signed pair
+///   4. freshly generated self-signed material, persisted for next boot
 pub fn material() -> Result<PemPair, Error> {
     if let (Ok(cert), Ok(key)) = (env::var("DIFFTHING_TLS_CERT"), env::var("DIFFTHING_TLS_KEY")) {
         return Ok((fs::read(cert)?, fs::read(key)?));
+    }
+    if let Some(pair) = bundled() {
+        return Ok(pair);
     }
     let dir = tls_dir().ok_or("no config directory found (set HOME or XDG_CONFIG_HOME)")?;
     material_in(&dir)

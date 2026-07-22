@@ -53,9 +53,10 @@ function fail(message) {
 
 function main() {
   const binary = resolveBinary();
-  // Default flow is HTTPS via local.diffthing.dev (SPA embedded in the
-  // binary). Pass --offline for the plain-http 127.0.0.1 fallback. All args
-  // forward through unchanged.
+  // Default flow is HTTPS via local.diffthing.dev, served with a bundled
+  // trusted cert (SPA + cert both embedded in the binary) so browsers load
+  // zero-prompt. Pass --offline for the plain-http 127.0.0.1 fallback. All
+  // args forward through unchanged.
   const args = process.argv.slice(2);
 
   let result = spawnSync(binary, args, { stdio: "inherit" });

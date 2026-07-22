@@ -45,3 +45,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # e2e tests dial the real daemon binary over WebSocket.
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
+
+[lints.rust]
+# `bundled_cert` is set by build.rs when a real cert is committed under certs/.
+# Declared here so check-cfg (Rust 1.80+) doesn't flag it as unexpected.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bundled_cert)'] }

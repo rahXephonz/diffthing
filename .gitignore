@@ -11,3 +11,12 @@ dist/
 
 # CI-generated per-platform npm packages (built by release-npm workflow)
 npm/diffthing-*/
+
+# Locally-trusted mkcert material from `pnpm cert:dev` — never commit
+.certs-dev/
+
+# Bundled TLS material for local.diffthing.dev is NEVER committed. In releases
+# it is written into certs/ from CI secrets before the build; locally it comes
+# from scripts/cert-prod.sh. Only certs/README.md is tracked.
+crates/daemon/certs/*.pem
+crates/daemon/certs/*.key.pem

@@ -9,6 +9,7 @@
     "web:format": "pnpm --filter diffthing-web format",
     "daemon:test": "cargo test --workspace",
     "daemon:run": "cargo run -p diffthing",
+    "cert:dev": "bash scripts/cert-dev.sh",
     "start": "pnpm web:build && cargo run -p diffthing -- --offline",
     "daemon:fmt": "cargo fmt --all",
     "daemon:fmt:check": "cargo fmt --all -- --check",

@@ -77,8 +77,16 @@ reviews and approves.** Nothing below weakens that.
 13. Distribution breadth: Homebrew tap, `cargo-binstall`, Scoop. All three
     consume the release assets published by item 7.
 14. Docs site and a 60-second demo — the value is not obvious cold.
-15. ~~Certificate-renewal automation~~ — obsolete: certificates are now
-    generated per install (no shared cert ships, nothing to renew centrally).
+15. **Bundled trusted cert (Drizzle-style).** A real CA-trusted cert for
+    `local.diffthing.dev` is embedded in the binary (`crates/daemon/certs/`,
+    gated by `build.rs`) and served by default, so every browser — Safari
+    included — loads zero-prompt. Per-install self-signed remains the fallback
+    when no cert is committed. This **reverses the earlier "no shared key ships"
+    stance**: shipping the private key lets anyone who can bend a victim's
+    DNS/hosts for `local.diffthing.dev` serve trusted JS and read the ephemeral
+    fragment token. Accepted (it requires already owning the victim's name
+    resolution); `--offline` stays the zero-shared-trust path. Certificate
+    renewal is the owner's to rotate; see `certs/README.md`.
 16. **Connect UX.** Auto-open the browser to the printed URL on start, and use a
     fixed default port (`4983`, falling back if busy) for a stable, bookmarkable
     `https://local.diffthing.dev:4983`. Removes the bare-domain confusion. We will take it
@@ -125,8 +133,10 @@ replace it or automate approval.
 ## Deferred — intentionally out of scope for now
 
 - Team / multi-user review.
-- Remote-hosted SPA mode (Drizzle-style). Our loopback model avoids the mixed
-  content / Local Network Access fragility; keep it.
+- Fully remote-hosted SPA (static build served from `diffthing.dev`, daemon
+  API-only). Not needed for browser trust — item 15's bundled trusted cert
+  already gives the Drizzle zero-prompt UX from the daemon-served SPA. Revisit
+  only if we want the SPA to update independently of the installed daemon.
 - Non-git version control.
 
 ## Sequencing
