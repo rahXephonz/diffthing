@@ -83,6 +83,9 @@ echo "cert-prod: wrote"
 echo "  $CERT"
 echo "  $KEY"
 echo
-echo "next: cargo build -p diffthing   # bundled_cert turns on"
-echo "      git add crates/daemon/certs/$DOMAIN.pem crates/daemon/certs/$DOMAIN.key.pem"
-echo "      git commit && release"
+# These files are gitignored on purpose — the key must NEVER be committed.
+# Ship it to releases via CI secrets instead.
+echo "next: cargo build -p diffthing        # local: bundled_cert turns on"
+echo "      gh secret set DIFFTHING_TLS_CERT < $CERT"
+echo "      gh secret set DIFFTHING_TLS_KEY  < $KEY"
+echo "      # then merge + release; CI embeds it. Do NOT git add these files."
