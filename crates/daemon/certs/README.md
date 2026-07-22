@@ -13,15 +13,20 @@ falls back to a per-install self-signed cert, so the crate always builds.
 ## Obtaining the cert
 
 `local.diffthing.dev` resolves to `127.0.0.1` via public DNS. Issue a cert for
-that name against a public CA — e.g. Let's Encrypt via a DNS-01 challenge (no
-inbound port needed since the name is loopback):
+that name against a public CA — Let's Encrypt via a DNS-01 challenge (no inbound
+port needed since the name is loopback). Use the helper, which issues and drops
+both files here in one step (and is renew-safe for the ~90-day rotation):
 
 ```
-# example, using acme.sh with your DNS provider's API
-acme.sh --issue --dns dns_cf -d local.diffthing.dev
+DNS_PROVIDER=dns_cf ./scripts/cert-prod.sh    # provider creds via acme.sh env
 ```
 
-Then copy the fullchain and key into this directory with the names above.
+Prereqs: `acme.sh` installed and your DNS provider's API credentials exported
+(see the acme.sh dnsapi wiki). Also make sure an `A` record
+`local.diffthing.dev → 127.0.0.1` exists so users actually reach loopback.
+
+After it runs: `cargo build -p diffthing` (turns on `bundled_cert`), then commit
+the two files and cut a release.
 
 ## Security tradeoff (accepted)
 
