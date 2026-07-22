@@ -138,6 +138,26 @@ async fn http_get(port: u16, path: &str) -> String {
     }
 }
 
+/// Raw request variant of `http_get`: sends arbitrary bytes so tests can
+/// carry header values an HTTP client would refuse to construct (e.g. a
+/// malformed non-UTF-8 `Origin`).
+async fn http_send_raw(port: u16, request: &[u8]) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let deadline = tokio::time::Instant::now() + WAIT;
+    loop {
+        if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)).await {
+            if stream.write_all(request).await.is_ok() {
+                let mut buf = Vec::new();
+                if stream.read_to_end(&mut buf).await.is_ok() && !buf.is_empty() {
+                    return String::from_utf8_lossy(&buf).into_owned();
+                }
+            }
+        }
+        assert!(tokio::time::Instant::now() < deadline, "daemon never answered raw request");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 async fn ws_connect(daemon: &mut Daemon) -> Ws {
@@ -211,6 +231,69 @@ async fn boot_serves_health_and_spa() {
     // Missing assets are honest 404s, not index.html fallbacks.
     let missing = http_get(daemon.port, "/assets/nope.js").await;
     assert!(missing.starts_with("HTTP/1.1 404"), "asset: {missing}");
+
+    drop(daemon);
+    std::fs::remove_dir_all(&repo).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn responses_carry_baseline_security_headers() {
+    let repo = setup_repo();
+    let daemon = spawn_daemon(&repo);
+
+    for path in ["/", "/health"] {
+        let resp = http_get(daemon.port, path).await;
+        let head = resp.to_lowercase();
+        assert!(head.contains("content-security-policy:"), "{path} missing CSP: {resp}");
+        assert!(head.contains("frame-ancestors 'none'"), "{path} CSP lacks frame-ancestors");
+        assert!(head.contains("x-content-type-options: nosniff"), "{path} missing nosniff");
+        assert!(head.contains("x-frame-options: deny"), "{path} missing x-frame-options");
+        assert!(head.contains("referrer-policy: no-referrer"), "{path} missing referrer-policy");
+    }
+
+    drop(daemon);
+    std::fs::remove_dir_all(&repo).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn origin_policy_absent_allowed_malformed_rejected() {
+    let repo = setup_repo();
+    let daemon = spawn_daemon(&repo);
+    let port = daemon.port;
+
+    // Absent Origin (curl-style): allowed — token still gates everything.
+    let absent = http_get(port, "/health").await;
+    assert!(absent.starts_with("HTTP/1.1 200"), "absent origin: {absent}");
+
+    // Present but malformed (non-UTF-8 bytes): must NOT fall through to the
+    // permissive absent-branch — explicit 403.
+    let mut req = Vec::new();
+    req.extend_from_slice(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: ");
+    req.extend_from_slice(&[0xff, 0xfe]);
+    req.extend_from_slice(b"evil\r\nConnection: close\r\n\r\n");
+    let malformed = http_send_raw(port, &req).await;
+    assert!(malformed.starts_with("HTTP/1.1 403"), "malformed origin: {malformed}");
+
+    // Present, well-formed, not allowlisted: rejected too.
+    let evil = http_send_raw(
+        port,
+        "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://evil.example\r\nConnection: close\r\n\r\n".to_string().as_bytes(),
+    )
+    .await;
+    assert!(evil.starts_with("HTTP/1.1 403"), "disallowed origin: {evil}");
+
+    // Present and allowlisted: 200 with the origin echoed for CORS.
+    let good = http_send_raw(
+        port,
+        format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1:{port}\r\nConnection: close\r\n\r\n").as_bytes(),
+    )
+    .await;
+    assert!(good.starts_with("HTTP/1.1 200"), "allowed origin: {good}");
+    assert!(
+        good.to_lowercase()
+            .contains(&format!("access-control-allow-origin: http://127.0.0.1:{port}")),
+        "missing CORS echo: {good}"
+    );
 
     drop(daemon);
     std::fs::remove_dir_all(&repo).ok();
