@@ -187,6 +187,12 @@ Detailed invariants: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - WebSocket handshake validates token, origin, and protocol version.
 - Source leaves machine only through agent CLI selected by user.
 - Agent edits are reconciled into same review pipeline as manual edits.
+- Diff content is treated as untrusted in agent prompts: hunk bodies are
+  fenced with a per-run random boundary, and runners are invoked with the
+  narrowest capabilities their CLI supports (shell/network tools disabled
+  for `claude`, OS sandbox for `codex`). Out-of-scope edits are rolled back
+  after every run. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#agent-trust-boundary).
 - `local.diffthing.dev` resolves only to loopback, and its TLS certificate is
   **generated per install** (cached in `~/.config/diffthing/tls`, key `0600`).
   No private key ships in releases or source control, so no shared key exists

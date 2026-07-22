@@ -180,8 +180,12 @@ fn schema_json() -> serde_json::Value {
 /// Agent CLIs we know how to drive, in installed-tool fallback order.
 /// The user's tool, the user's login, the user's model choice — diffthing
 /// brings no keys and no provider of its own.
+///
+/// The walkthrough call is pure text-in/JSON-out: hunk digests carry
+/// untrusted first lines, so where the CLI can express it, tool use is
+/// disabled outright — organization needs no shell, no edits, no network.
 const KNOWN_AGENTS: &[(&str, &[&str])] = &[
-    ("claude", &["-p"]),
+    ("claude", &["-p", "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch"]),
     ("codex", &["exec"]),
     ("gemini", &["-p"]),
     ("kimi", &["-p"]),

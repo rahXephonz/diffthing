@@ -59,6 +59,34 @@ Agent selection order:
 4. Installed supported CLI.
 5. Deterministic fallback.
 
+#### Agent trust boundary
+
+Everything read out of the working tree is **untrusted input**: diff hunk
+bodies can come from a malicious branch, PR, or a previous agent run, and may
+embed indirect prompt-injection payloads. The layered containment is:
+
+1. **Prompt fencing** — dispatch wraps hunk bodies and per-hunk notes in a
+   per-run random boundary and instructs the agent that fenced content is
+   data, never instructions. The walkthrough call sends digests (path, first
+   line, counts, score), not bodies.
+2. **Capability narrowing** — each runner is invoked with the tightest flags
+   its CLI supports: `claude` runs with shell and network tools disabled
+   (file edits only for dispatch; no tools at all for walkthrough
+   organization), `codex exec --full-auto` runs in its OS sandbox with
+   network disabled, `aider` edits through the LLM protocol without
+   shell/network tools. `gemini` exposes no equivalent headless flags and
+   relies on the layers below.
+3. **Scope rollback** — out-of-scope edits are reverted or quarantined after
+   every run, and the violation is reported on the review thread (see
+   `dispatch.rs` rollback planner).
+4. **Human approval** — nothing the agent writes is staged until the reviewer
+   marks it viewed and resolves open comments.
+
+Residual risk, stated honestly: prompt fencing is advisory for models, and a
+runner whose CLI offers no capability flags (`gemini`) can still execute what
+its own tool policy allows. Full OS-level sandboxing of every runner is the
+remaining hardening step, tracked in the roadmap.
+
 ### Web
 
 `web` renders scopes, unified/split diffs, comments, Markdown preview, dispatch state, and revision updates. It does not recompute domain decisions.

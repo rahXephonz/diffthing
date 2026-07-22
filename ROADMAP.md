@@ -86,6 +86,11 @@ reviews and approves.** Nothing below weakens that.
 
 Ergonomics are what make people stay.
 
+17. OS-level sandboxing for every dispatch runner (repo-only filesystem,
+    network off by default) — completes the agent trust boundary beyond
+    prompt fencing + per-CLI capability flags + scope rollback. Needs a
+    per-platform strategy (Seatbelt on macOS, landlock/bwrap on Linux).
+
 ## Deferred — intentionally out of scope for now
 
 - Team / multi-user review.
