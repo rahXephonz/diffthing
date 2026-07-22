@@ -33,9 +33,21 @@ The residual risk: anyone who can bend a victim's DNS/hosts for
 fragment token. `--offline` (plain HTTP on `127.0.0.1`) remains the
 zero-shared-trust path. This matches how Drizzle Studio ships `local.drizzle.studio`.
 
+## Local development
+
+To test the trusted-cert flow on your own machine without a real CA cert, run:
+
+```
+pnpm cert:dev            # requires mkcert; extra args forward: pnpm cert:dev -- --base main
+```
+
+`scripts/cert-dev.sh` runs `mkcert -install`, mints a locally-trusted cert for
+`local.diffthing.dev` into `.certs-dev/` (gitignored), and starts the daemon
+with the `DIFFTHING_TLS_CERT` / `DIFFTHING_TLS_KEY` env override. Safari then
+opens the page zero-prompt — but only on machines where `mkcert -install` ran.
+
 ## Do not commit test/self-signed material here
 
-Only a genuinely CA-trusted cert belongs in this directory. A self-signed cert
-placed here would be embedded and served as if trusted, defeating the point and
-re-triggering the Safari failure. For local testing use `mkcert` + the
-`DIFFTHING_TLS_CERT` / `DIFFTHING_TLS_KEY` env override instead.
+Only a genuinely CA-trusted cert belongs in this directory. A self-signed or
+mkcert cert placed here would be embedded and served as if publicly trusted,
+defeating the point and re-triggering the Safari failure on other machines.

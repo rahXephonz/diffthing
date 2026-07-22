@@ -11,3 +11,6 @@ dist/
 
 # CI-generated per-platform npm packages (built by release-npm workflow)
 npm/diffthing-*/
+
+# Locally-trusted mkcert material from `pnpm cert:dev` — never commit
+.certs-dev/
