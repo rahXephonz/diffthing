@@ -361,6 +361,10 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>, _permit: OwnedS
                         session.mark_viewed(hunk).await;
                         broadcast_review(&session).await;
                     }
+                    ClientMsg::MarkAllViewed => {
+                        session.mark_all_viewed().await;
+                        broadcast_review(&session).await;
+                    }
                     ClientMsg::AddFlag { hunk, line, comment } => {
                         // Thread semantics: a comment on a (hunk, line) that
                         // already has an open thread is a REPLY (appended);
