@@ -385,6 +385,60 @@ async fn ws_rejects_disallowed_origin() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn ws_drops_silent_preauth_socket_at_hello_deadline() {
+    let repo = setup_repo();
+    let mut daemon = spawn_daemon(&repo);
+
+    // Connect and send NOTHING. The daemon must close the socket at the
+    // pre-auth Hello deadline (10s) instead of parking it forever.
+    let mut ws = ws_connect(&mut daemon).await;
+    let closed = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            match ws.next().await {
+                None => break,                        // stream ended
+                Some(Ok(Message::Close(_))) => break, // explicit close
+                Some(Err(_)) => break,                // reset counts too
+                Some(Ok(_)) => {}                     // ignore anything else
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "daemon never closed the silent pre-auth socket");
+
+    drop(daemon);
+    std::fs::remove_dir_all(&repo).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ws_connection_cap_refuses_seventeenth_socket() {
+    let repo = setup_repo();
+    let mut daemon = spawn_daemon(&repo);
+
+    // Hold 16 live sockets (the cap), then the next upgrade must be refused
+    // with 503 rather than queued.
+    let mut held = Vec::new();
+    for _ in 0..16 {
+        held.push(ws_connect(&mut daemon).await);
+    }
+    let err = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}/ws", daemon.port))
+        .await
+        .expect_err("17th connection must be refused");
+    match err {
+        tokio_tungstenite::tungstenite::Error::Http(resp) => {
+            assert_eq!(resp.status(), 503);
+        }
+        other => panic!("expected HTTP 503 rejection, got: {other:?}"),
+    }
+
+    // Releasing one permit frees a slot for a new connection.
+    drop(held.pop());
+    let _ws = ws_connect(&mut daemon).await;
+
+    drop(daemon);
+    std::fs::remove_dir_all(&repo).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn watcher_reconciliation_announces_and_applies() {
     let repo = setup_repo();
     let mut daemon = spawn_daemon(&repo);

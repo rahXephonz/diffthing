@@ -20,6 +20,49 @@ use axum_server::tls_rustls::RustlsConfig;
 use diffthing_core::protocol::{ClientMsg, ErrorCode, ServerMsg, PROTOCOL_VERSION};
 use rust_embed::RustEmbed;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+
+// Resource limits (DoS hardening). The daemon is loopback-only, but a
+// malicious local process or a token-holding tab must not be able to exhaust
+// tasks, memory, or spawn unbounded LLM work.
+/// Concurrent WS connections — far above any real number of local tabs.
+const MAX_WS_CONNECTIONS: usize = 16;
+/// Max WS message/frame size. Client messages are small JSON (comments,
+/// instructions); 256 KiB is generous, not open-ended.
+const MAX_WS_MSG_BYTES: usize = 256 * 1024;
+/// A socket that hasn't sent its Hello within this window is dropped —
+/// pre-auth sockets must not park forever.
+const HELLO_DEADLINE: Duration = Duration::from_secs(10);
+/// Per-connection token bucket for client messages: sustained rate and burst.
+/// Humans clicking through a review sit far below both.
+const MSG_BURST: f64 = 30.0;
+const MSG_REFILL_PER_SEC: f64 = 10.0;
+
+/// Token bucket: refills continuously, capped at burst. One per connection.
+struct RateLimiter {
+    tokens: f64,
+    last: Instant,
+}
+
+impl RateLimiter {
+    fn new() -> Self {
+        Self { tokens: MSG_BURST, last: Instant::now() }
+    }
+
+    fn allow(&mut self) -> bool {
+        let now = Instant::now();
+        self.tokens = MSG_BURST
+            .min(self.tokens + now.duration_since(self.last).as_secs_f64() * MSG_REFILL_PER_SEC);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
 
 /// How the daemon exposes the review UI.
 pub enum ServeMode {
@@ -43,6 +86,9 @@ struct WebAssets;
 struct AppState {
     session: Arc<Session>,
     port: u16,
+    /// Hard cap on live WS connections; permits are held for the socket's
+    /// whole lifetime, so leaked/parked sockets count until they close.
+    conns: Arc<Semaphore>,
 }
 
 /// Serves on an ALREADY-BOUND listener (bound at boot, before the URL was
@@ -60,7 +106,7 @@ pub async fn serve(
     let app = Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
-        .with_state(AppState { session, port })
+        .with_state(AppState { session, port, conns: Arc::new(Semaphore::new(MAX_WS_CONNECTIONS)) })
         .fallback(get(serve_asset))
         .layer(axum::middleware::from_fn(security_headers));
 
@@ -196,7 +242,15 @@ async fn ws_upgrade(
     if matches!(check_origin(&headers, state.port), OriginCheck::Denied) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    ws.on_upgrade(move |socket| handle_ws(socket, state.session)).into_response()
+    // Connection cap: refuse outright rather than queueing — a flood must
+    // not build a backlog of pending upgrades.
+    let Ok(permit) = Arc::clone(&state.conns).try_acquire_owned() else {
+        return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    ws.max_message_size(MAX_WS_MSG_BYTES)
+        .max_frame_size(MAX_WS_MSG_BYTES)
+        .on_upgrade(move |socket| handle_ws(socket, state.session, permit))
+        .into_response()
 }
 
 /// Push the current review state to every connected tab. Called after any
@@ -214,10 +268,11 @@ async fn send(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
     }
 }
 
-async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
-    // Message #1 MUST be Hello{protocol, token}.
-    let hello = match socket.recv().await {
-        Some(Ok(Message::Text(t))) => serde_json::from_str::<ClientMsg>(&t).ok(),
+async fn handle_ws(mut socket: WebSocket, session: Arc<Session>, _permit: OwnedSemaphorePermit) {
+    // Message #1 MUST be Hello{protocol, token}, and it must arrive within
+    // the deadline — an idle pre-auth socket is dropped, not parked.
+    let hello = match tokio::time::timeout(HELLO_DEADLINE, socket.recv()).await {
+        Ok(Some(Ok(Message::Text(t)))) => serde_json::from_str::<ClientMsg>(&t).ok(),
         _ => None,
     };
     match hello {
@@ -278,6 +333,7 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
     }
 
     let mut events = session.events.subscribe();
+    let mut limiter = RateLimiter::new();
 
     loop {
         tokio::select! {
@@ -290,6 +346,16 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
             incoming = socket.recv() => {
                 let Some(Ok(Message::Text(t))) = incoming else { return };
                 let Ok(msg) = serde_json::from_str::<ClientMsg>(&t) else { continue };
+                // Mutation flood control: excess messages are refused, not
+                // queued. The client is told why and the socket stays open.
+                if !limiter.allow() {
+                    let ok = send(&mut socket, &ServerMsg::Error {
+                        code: ErrorCode::RateLimited,
+                        message: "too many requests — slow down".into(),
+                    }).await;
+                    if !ok { return; }
+                    continue;
+                }
                 match msg {
                     ClientMsg::MarkViewed { hunk } => {
                         session.mark_viewed(hunk).await;
@@ -370,5 +436,34 @@ async fn handle_ws(mut socket: WebSocket, session: Arc<Session>) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rate_limiter_allows_burst_then_refuses() {
+        let mut rl = RateLimiter::new();
+        for i in 0..MSG_BURST as usize {
+            assert!(rl.allow(), "message {i} within burst must pass");
+        }
+        assert!(!rl.allow(), "burst exhausted — must refuse");
+    }
+
+    #[test]
+    fn rate_limiter_refills_over_time() {
+        let mut rl = RateLimiter::new();
+        for _ in 0..MSG_BURST as usize {
+            rl.allow();
+        }
+        assert!(!rl.allow());
+        // Simulate one second passing: refill grants MSG_REFILL_PER_SEC.
+        rl.last = Instant::now() - Duration::from_secs(1);
+        for i in 0..MSG_REFILL_PER_SEC as usize {
+            assert!(rl.allow(), "refilled message {i} must pass");
+        }
+        assert!(!rl.allow(), "refill spent — must refuse again");
     }
 }
