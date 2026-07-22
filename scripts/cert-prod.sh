@@ -30,18 +30,37 @@ CERT_DIR="$ROOT/crates/daemon/certs"
 CERT="$CERT_DIR/$DOMAIN.pem"
 KEY="$CERT_DIR/$DOMAIN.key.pem"
 
-if ! command -v acme.sh >/dev/null 2>&1; then
+# Prefer the upstream install (~/.acme.sh/acme.sh) over a package-manager one:
+# newer DNS providers (e.g. dns_hostinger) ship on master but lag in Homebrew.
+ACME=""
+if [ -x "$HOME/.acme.sh/acme.sh" ]; then
+  ACME="$HOME/.acme.sh/acme.sh"
+elif command -v acme.sh >/dev/null 2>&1; then
+  ACME="$(command -v acme.sh)"
+else
   echo "cert-prod: acme.sh not found." >&2
-  echo "  install: https://github.com/acmesh-official/acme.sh#1-how-to-install" >&2
+  echo "  install (recommended, has all dnsapi providers):" >&2
+  echo "    curl https://get.acme.sh | sh -s email=you@example.com" >&2
   exit 1
 fi
 
-echo "cert-prod: issuing $DOMAIN via $DNS_PROVIDER (DNS-01)…"
-acme.sh --issue --dns "$DNS_PROVIDER" -d "$DOMAIN"
+# Fail early with a clear message if this acme.sh lacks the requested provider,
+# rather than a cryptic hook error mid-issue.
+_dnsapi="$(dirname "$ACME")/dnsapi/$DNS_PROVIDER.sh"
+if [ ! -f "$_dnsapi" ]; then
+  echo "cert-prod: $ACME has no $DNS_PROVIDER provider ($_dnsapi missing)." >&2
+  echo "  its version predates that provider. Reinstall from upstream master:" >&2
+  echo "    curl https://get.acme.sh | sh -s email=you@example.com" >&2
+  echo "  then open a new shell and re-run this script." >&2
+  exit 1
+fi
+
+echo "cert-prod: issuing $DOMAIN via $DNS_PROVIDER (DNS-01) using $ACME…"
+"$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN"
 
 # --install-cert copies the current material to fixed paths and is the
 # renew-safe way to keep these files fresh (acme.sh re-runs it on renewal).
-acme.sh --install-cert -d "$DOMAIN" \
+"$ACME" --install-cert -d "$DOMAIN" \
   --fullchain-file "$CERT" \
   --key-file "$KEY"
 
