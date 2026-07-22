@@ -55,8 +55,17 @@ if [ ! -f "$_dnsapi" ]; then
   exit 1
 fi
 
+# FORCE=1 rotates: reissue even if the current cert is still valid AND mint a
+# fresh private key. Use it after a key compromise / when replacing a leaked
+# cert — a plain renewal reuses the existing key, which is not a real rotation.
+FORCE_ARGS=()
+if [ "${FORCE:-}" = "1" ]; then
+  FORCE_ARGS=(--force --always-force-new-domain-key)
+  echo "cert-prod: FORCE=1 — reissuing with a brand-new key"
+fi
+
 echo "cert-prod: issuing ${DOMAIN} via ${DNS_PROVIDER} (DNS-01) using ${ACME}"
-"$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN"
+"$ACME" --issue --dns "$DNS_PROVIDER" -d "$DOMAIN" "${FORCE_ARGS[@]}"
 
 # --install-cert copies the current material to fixed paths and is the
 # renew-safe way to keep these files fresh (acme.sh re-runs it on renewal).
