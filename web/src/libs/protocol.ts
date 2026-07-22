@@ -1,6 +1,6 @@
 // Generated from diffthing-core by `pnpm protocol:generate`. Do not edit.
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export type { HunkId } from "./generated/HunkId";
 export type { Hunk } from "./generated/Hunk";

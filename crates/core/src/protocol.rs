@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 
-pub const PROTOCOL_VERSION: u16 = 5;
+pub const PROTOCOL_VERSION: u16 = 6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -27,6 +27,10 @@ pub enum ClientMsg {
     MarkViewed {
         hunk: HunkId,
     },
+    /// Bulk "reviewed everything, no issues" — marks every hunk viewed in one
+    /// shot instead of a per-hunk flood the rate limiter would reject. Stages
+    /// every file that becomes approved as a side effect, same as MarkViewed.
+    MarkAllViewed,
     AddFlag {
         hunk: HunkId,
         /// Index into the hunk's raw lines this comment anchors to, GitHub

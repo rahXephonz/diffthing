@@ -210,6 +210,28 @@ impl Session {
         staged
     }
 
+    /// Mark every hunk viewed in one pass (the "reviewed all, no issues"
+    /// action), then stage each file that becomes approved. One persist, one
+    /// broadcast — the per-hunk path would trip the connection rate limiter on
+    /// any non-trivial diff.
+    pub async fn mark_all_viewed(&self) {
+        // Distinct file paths, each with a representative hunk to drive the
+        // per-file approval check.
+        let by_path: Vec<(String, HunkId)> = {
+            let mut state = self.state.lock().await;
+            let mut seen: BTreeMap<String, HunkId> = BTreeMap::new();
+            for hunk in all_hunks(&state.files) {
+                state.review.mark_viewed(hunk.id.clone());
+                seen.entry(hunk.path.clone()).or_insert(hunk.id);
+            }
+            seen.into_iter().collect()
+        };
+        for (_, id) in &by_path {
+            self.stage_if_approved(id).await;
+        }
+        self.persist().await;
+    }
+
     /// Re-check file approval after any action that can clear its final
     /// blocker, including resolving its last open comment.
     pub async fn stage_if_approved(&self, id: &HunkId) -> bool {

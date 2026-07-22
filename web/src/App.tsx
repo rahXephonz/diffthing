@@ -38,6 +38,11 @@ export default function App() {
   );
   const query = filter.trim().toLowerCase();
 
+  const unviewedCount = useMemo(
+    () => [...hunksById.keys()].filter((id) => review?.status[id] !== "viewed").length,
+    [hunksById, review],
+  );
+
   const flagTextByHunk = useMemo(() => {
     const textByHunk = new Map<string, string>();
     for (const flag of review?.flags ?? []) {
@@ -188,6 +193,7 @@ export default function App() {
         stepNumber={stepNumber}
         stepMatches={stepMatches}
         stepDone={stepDone}
+        unviewedCount={unviewedCount}
         onFilterChange={setFilter}
         onSelectStep={selectStep}
         send={(message) => sendRef.current(message)}

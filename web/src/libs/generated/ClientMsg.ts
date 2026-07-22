@@ -4,6 +4,7 @@ import type { HunkId } from "./HunkId";
 export type ClientMsg =
   | { type: "hello"; protocol: number; token: string }
   | { type: "mark_viewed"; hunk: HunkId }
+  | { type: "mark_all_viewed" }
   | { type: "add_flag"; hunk: HunkId; line: number | null; comment: string }
   | { type: "close_flag"; hunk: HunkId; line: number | null }
   | {
