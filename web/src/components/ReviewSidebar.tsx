@@ -6,7 +6,7 @@ import type { ClientMsg, FileDiff, Hunk, ReviewState, Step, Walkthrough } from "
 import type { DispatchState } from "../libs/store";
 import { basename, fileTotals } from "../libs/utils";
 import FileTreeSection from "./FileTreeSection";
-import { badge, chromeButton, Counts, Kbd } from "./ReviewChrome";
+import { badge, chromeButton, Counts, Highlight, Kbd } from "./ReviewChrome";
 
 function StepDot({ done }: { done: boolean }) {
   return done ? (
@@ -86,8 +86,12 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
     return hunk ? (fileByPath.get(hunk.path) ?? null) : null;
   };
 
+  const query = filter.trim().toLowerCase();
+
   return (
-    <aside className="bg-panel border-r border-border p-4 flex flex-col gap-3 sticky top-0 h-screen overflow-y-auto">
+    // Fixed chrome (logo, search, file tree) with ONLY the scope list
+    // scrolling: the aside never scrolls as a whole, the middle pane does.
+    <aside className="bg-panel border-r border-border p-4 flex flex-col gap-3 sticky top-0 h-screen overflow-hidden">
       <header className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text">
           <img
@@ -124,7 +128,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
 
       <FileTreeSection
         files={files}
-        query={filter.trim().toLowerCase()}
+        query={query}
         iconsVersion={iconsVersion}
         selectedPaths={selectedPaths}
         onSelectFile={(path) => {
@@ -133,6 +137,9 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
         }}
       />
 
+      {/* Everything below (focus + scopes + agent status) is the only
+          scrolling region; chrome above and footer below stay put. */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
       {walkthrough?.focus && (
         <section>
           <h2 className="text-xs uppercase tracking-wider text-muted mb-1">Review focus</h2>
@@ -174,7 +181,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                     <StepDot done={stepDone(step)} />
                     <span className="min-w-0 flex-1">
                       <span className="block whitespace-normal break-all font-medium leading-snug">
-                        {stepNumber.get(step.id)} {step.title}
+                        {stepNumber.get(step.id)} <Highlight text={step.title} query={query} />
                       </span>
                     </span>
                     <span className="text-[11px] text-muted shrink-0 text-right leading-tight">
@@ -184,7 +191,9 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                     </span>
                   </span>
                   {step.framing && (
-                    <span className="text-xs text-muted leading-snug">{step.framing}</span>
+                    <span className="text-xs text-muted leading-snug">
+                      <Highlight text={step.framing} query={query} />
+                    </span>
                   )}
                   <span className="flex flex-col gap-0.5 text-xs">
                     {stepFiles.map((stepFile) => (
@@ -207,7 +216,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                           className="min-w-0 flex-1 whitespace-normal break-all text-muted leading-snug"
                           title={stepFile.path}
                         >
-                          {basename(stepFile.path)}
+                          <Highlight text={basename(stepFile.path)} query={query} />
                         </span>
                         <Counts added={stepFile.added} removed={stepFile.removed} />
                       </span>
@@ -242,6 +251,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
           {dispatch.detail && <> — {dispatch.detail}</>}
         </div>
       )}
+      </div>
 
       <footer className="flex flex-col gap-2">
         <button
