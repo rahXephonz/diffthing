@@ -185,7 +185,10 @@ fn schema_json() -> serde_json::Value {
 /// untrusted first lines, so where the CLI can express it, tool use is
 /// disabled outright — organization needs no shell, no edits, no network.
 const KNOWN_AGENTS: &[(&str, &[&str])] = &[
-    ("claude", &["-p", "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch"]),
+    // `--disallowedTools` is variadic in the claude CLI: the space-separated
+    // form swallows every following argument — including the prompt — as
+    // more deny rules. The `=` form binds exactly one value.
+    ("claude", &["-p", "--disallowedTools=Bash,Edit,Write,WebFetch,WebSearch"]),
     ("codex", &["exec"]),
     ("gemini", &["-p"]),
     ("kimi", &["-p"]),
@@ -248,12 +251,60 @@ pub fn detect_agent() -> Option<&'static str> {
         .or_else(|| KNOWN_AGENTS.iter().map(|(name, _)| *name).find(|name| on_path(name)))
 }
 
-/// Pull the first JSON object out of agent stdout — CLIs wrap answers in
-/// prose or code fences; the validator gate judges what we extract.
-fn extract_json(out: &str) -> Option<&str> {
-    let start = out.find('{')?;
-    let end = out.rfind('}')?;
-    (end > start).then(|| &out[start..=end])
+/// Pull candidate JSON objects out of agent stdout — CLIs wrap answers in
+/// prose or code fences, and trailing prose can itself contain braces.
+/// First-`{`-to-last-`}` slicing broke exactly there ("trailing characters",
+/// "expected `,` or `]`"), so this walks BALANCED objects instead: for each
+/// top-level `{`, scan brace depth (string- and escape-aware) to its true
+/// closing `}`. The caller tries candidates in order; the validator gate
+/// judges whichever parses.
+fn extract_json_candidates(out: &str) -> Vec<&str> {
+    let bytes = out.as_bytes();
+    let mut candidates = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'{' {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut escaped = false;
+        let mut end = None;
+        for (j, &b) in bytes.iter().enumerate().skip(start) {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if b == b'\\' {
+                    escaped = true;
+                } else if b == b'"' {
+                    in_string = false;
+                }
+                continue;
+            }
+            match b {
+                b'"' => in_string = true,
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(j);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        match end {
+            Some(j) => {
+                candidates.push(&out[start..=j]);
+                i = j + 1;
+            }
+            None => break, // unbalanced tail — no further complete object
+        }
+    }
+    candidates
 }
 
 fn build_prompt(digests: &[HunkDigest<'_>], prior_violations: &[String]) -> String {
@@ -329,11 +380,25 @@ impl LlmClient for CliLlm {
             return None;
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
-        let json = extract_json(&stdout)?;
-        let proposal: Proposal = serde_json::from_str(json)
-            .map_err(|e| eprintln!("diffthing: {} proposal parse failed: {e}", self.program))
-            .ok()?;
-        Some(proposal_to_walkthrough(proposal))
+        // Agent output may hold several balanced objects (echoed schema,
+        // examples, the answer); the first that deserializes as a Proposal
+        // wins. Only total failure is reported.
+        let candidates = extract_json_candidates(&stdout);
+        if candidates.is_empty() {
+            eprintln!("diffthing: {} returned no JSON object", self.program);
+            return None;
+        }
+        let mut last_err = None;
+        for json in &candidates {
+            match serde_json::from_str::<Proposal>(json) {
+                Ok(proposal) => return Some(proposal_to_walkthrough(proposal)),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        if let Some(e) = last_err {
+            eprintln!("diffthing: {} proposal parse failed: {e}", self.program);
+        }
+        None
     }
 }
 
@@ -470,8 +535,40 @@ mod tests {
     #[test]
     fn extract_json_strips_prose_and_fences() {
         let out = "Sure, here it is:\n```json\n{\"scopes\":[]}\n```\nDone.";
-        assert_eq!(extract_json(out), Some("{\"scopes\":[]}"));
-        assert_eq!(extract_json("no json here"), None);
+        assert_eq!(extract_json_candidates(out), vec!["{\"scopes\":[]}"]);
+        assert!(extract_json_candidates("no json here").is_empty());
+    }
+
+    #[test]
+    fn extract_json_survives_braces_in_trailing_prose() {
+        // The old first-{-to-last-} slice swallowed the trailing brace and
+        // produced "trailing characters" / "expected `,` or `]`" errors.
+        let out = "{\"scopes\":[]}\nNote: wrap ids like {this} in production.";
+        let candidates = extract_json_candidates(out);
+        assert_eq!(candidates[0], "{\"scopes\":[]}");
+        assert!(serde_json::from_str::<serde_json::Value>(candidates[0]).is_ok());
+    }
+
+    #[test]
+    fn extract_json_yields_each_object_when_output_has_several() {
+        // Agents sometimes echo the schema before answering.
+        let out = "schema: {\"type\":\"object\"}\nanswer:\n{\"focus\":\"f\",\"scopes\":[]}";
+        let candidates = extract_json_candidates(out);
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[1], "{\"focus\":\"f\",\"scopes\":[]}");
+    }
+
+    #[test]
+    fn extract_json_ignores_braces_inside_strings() {
+        let out = r#"{"focus":"touches {a} and \"b\"","scopes":[]} tail }"#;
+        let candidates = extract_json_candidates(out);
+        assert_eq!(candidates, vec![r#"{"focus":"touches {a} and \"b\"","scopes":[]}"#]);
+    }
+
+    #[test]
+    fn extract_json_skips_unbalanced_tail() {
+        let out = "{\"scopes\":[]} then broken {\"oops\": ";
+        assert_eq!(extract_json_candidates(out), vec!["{\"scopes\":[]}"]);
     }
 
     #[test]
