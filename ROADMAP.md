@@ -55,20 +55,20 @@ reviews and approves.** Nothing below weakens that.
 9. **Stop-time review gate** (ships in the plugin from item 8). The real
    failure mode is not that review is hard, it is that review gets skipped:
    the agent declares itself done, the human skims, the change ships. A skill
-   the agent *may* invoke does not fix skipping. A stop hook does — when the
+   the agent _may_ invoke does not fix skipping. A stop hook does — when the
    agent claims completion, surface "8 hunks, 0 reviewed — review at <url>",
    with an opt-in blocking mode for people who want it enforced. This turns
    the product boundary from a stated principle into a structural one, and no
    generic plugin can copy it because it needs the daemon. Note the direction
-   of information flow: the hook reads review state to tell the *human* what
+   of information flow: the hook reads review state to tell the _human_ what
    is unreviewed. The agent still never acts on that state.
 10. **Session-start pickup of open comments** (also plugin-side). Persistence
-   landed in v0.2 but nothing consumes it across sessions yet: a reviewer
-   leaves comments, closes the laptop, and the next morning the agent has no
-   idea they exist. A session-start hook reads `.diffthing/review.db` and
-   tells the agent "2 open review comments from your last session" so work
-   resumes there instead of with "what should I do next?". Cheap — the data
-   is already on disk, keyed by content hash, and survives line shifts.
+    landed in v0.2 but nothing consumes it across sessions yet: a reviewer
+    leaves comments, closes the laptop, and the next morning the agent has no
+    idea they exist. A session-start hook reads `.diffthing/review.db` and
+    tells the agent "2 open review comments from your last session" so work
+    resumes there instead of with "what should I do next?". Cheap — the data
+    is already on disk, keyed by content hash, and survives line shifts.
 
 ## v1.0 — "real product"
 
@@ -90,6 +90,37 @@ Ergonomics are what make people stay.
     network off by default) — completes the agent trust boundary beyond
     prompt fencing + per-CLI capability flags + scope rollback. Needs a
     per-platform strategy (Seatbelt on macOS, landlock/bwrap on Linux).
+
+## v2.x+ — "engineering intelligence"
+
+Long-term direction, deliberately sequenced after the core review workflow.
+Generation is becoming cheap; judgment is becoming valuable. Everything here
+exists to make human judgment scale — with context and memory — never to
+replace it or automate approval.
+
+18. **Engineering memory.** Persist decisions alongside review state, not only
+    viewed/resolved status: why a comment was resolved, why an approach was
+    rejected, rationale for important changes, recurring review discussions.
+    Future reviews benefit from past human judgment, and the repository
+    accumulates a durable record of _why_ things changed, not only _what_.
+19. **Repository memory.** Learn repo-specific conventions over time: naming,
+    architectural boundaries, common migration patterns, known risky areas.
+    Local by default, fully under the developer's control.
+20. **Review recipes.** Capture review patterns that worked (React major
+    upgrades, database migrations, auth refactors, API version migrations) and
+    reuse them instead of restating the same guidance every review.
+21. **Context engine.** Feed items 18–20 — prior decisions, conventions,
+    architecture, known constraints — to supported agents before they execute
+    explicit requests. Better inputs, same boundary: the human still reviews
+    and approves.
+22. **Review analytics.** Metrics for improving review practice: completion
+    time, high-risk change distribution, reopened changes, churn, files with
+    recurring issues, coverage over time. For improving practices, never for
+    evaluating individuals.
+23. **Knowledge graph (experimental).** Explore representing the memory from
+    items 18–20 as connected entities (files, modules, decisions, migrations,
+    recipes) to deepen context for future reviews and agent interactions —
+    never to automate approval.
 
 ## Deferred — intentionally out of scope for now
 
