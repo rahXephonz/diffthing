@@ -29,10 +29,10 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "diffthing-darwin-arm64": "0.2.1",
-    "diffthing-darwin-x64": "0.2.1",
-    "diffthing-linux-arm64": "0.2.1",
-    "diffthing-linux-x64": "0.2.1",
-    "diffthing-windows-x64": "0.2.1"
+    "diffthing-darwin-arm64": "0.2.3",
+    "diffthing-darwin-x64": "0.2.3",
+    "diffthing-linux-arm64": "0.2.3",
+    "diffthing-linux-x64": "0.2.3",
+    "diffthing-windows-x64": "0.2.3"
   }
 }
