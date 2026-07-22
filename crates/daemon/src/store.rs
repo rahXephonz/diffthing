@@ -27,16 +27,51 @@ pub struct Store {
     conn: Mutex<Connection>,
 }
 
+/// Error if `path` exists and is a symlink. `symlink_metadata` does not
+/// follow links, so this sees the link itself, not its target.
+fn reject_symlink(path: &Path) -> Result<(), BoxErr> {
+    match std::fs::symlink_metadata(path) {
+        Ok(md) if md.file_type().is_symlink() => {
+            Err(format!("refusing to follow symlink at {}", path.display()).into())
+        }
+        _ => Ok(()),
+    }
+}
+
 impl Store {
     /// Open (creating if needed) `.diffthing/review.db` under `repo`. Also
     /// drops a `.diffthing/.gitignore` (`*`) so the store itself never shows
     /// up in the diff being reviewed.
+    ///
+    /// Symlink hardening: a malicious repo can ship `.diffthing` (or
+    /// `review.db` / `.gitignore` inside it) as a symlink pointing outside
+    /// the repo, redirecting our writes to arbitrary host paths. Refuse to
+    /// follow any of them — the session then just runs without persistence
+    /// (open is best-effort by design).
     pub fn open(repo: &Path) -> Result<Store, BoxErr> {
         let dir = repo.join(".diffthing");
+        reject_symlink(&dir)?;
         std::fs::create_dir_all(&dir)?;
+        // create_dir_all happily traverses a symlink that appeared between
+        // the check and the create: verify the resolved directory really
+        // lives under the repo before writing anything into it.
+        let canonical_repo = repo.canonicalize()?;
+        let canonical_dir = dir.canonicalize()?;
+        if !canonical_dir.starts_with(&canonical_repo) {
+            return Err(format!(
+                "refusing store outside repo: {} resolves to {}",
+                dir.display(),
+                canonical_dir.display()
+            )
+            .into());
+        }
+        let gitignore = dir.join(".gitignore");
+        let db = dir.join("review.db");
+        reject_symlink(&gitignore)?;
+        reject_symlink(&db)?;
         // Keep the whole store out of the reviewed working tree.
-        let _ = std::fs::write(dir.join(".gitignore"), "*\n");
-        let conn = Connection::open(dir.join("review.db"))?;
+        let _ = std::fs::write(gitignore, "*\n");
+        let conn = Connection::open(db)?;
         // A table from an older schema (no walkthrough column) can't be
         // written to, let alone read. Discard it — same policy as the
         // version check in `load`.
@@ -215,6 +250,66 @@ mod tests {
         store.save("HEAD", &[], &ReviewState::default(), &mk_walkthrough("t")).await.unwrap();
         assert!(store.load("HEAD").await.is_some());
         std::fs::remove_dir_all(&repo).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_store_dir_rejected() {
+        let repo = tmp_repo();
+        let target = tmp_repo(); // attacker-controlled directory outside repo
+        std::os::unix::fs::symlink(&target, repo.join(".diffthing")).unwrap();
+
+        let err = match Store::open(&repo) {
+            Ok(_) => panic!("open must fail"),
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("symlink"), "unexpected error: {err}");
+        // Nothing was written through the link.
+        assert!(!target.join(".gitignore").exists());
+        assert!(!target.join("review.db").exists());
+
+        std::fs::remove_dir_all(&repo).ok();
+        std::fs::remove_dir_all(&target).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_db_rejected() {
+        let repo = tmp_repo();
+        let dir = repo.join(".diffthing");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = tmp_repo().join("victim.db");
+        std::os::unix::fs::symlink(&target, dir.join("review.db")).unwrap();
+
+        let err = match Store::open(&repo) {
+            Ok(_) => panic!("open must fail"),
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("symlink"), "unexpected error: {err}");
+        assert!(!target.exists(), "sqlite must not create the link target");
+
+        std::fs::remove_dir_all(&repo).ok();
+        std::fs::remove_dir_all(target.parent().unwrap()).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_gitignore_rejected() {
+        let repo = tmp_repo();
+        let dir = repo.join(".diffthing");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = tmp_repo().join("victim-file");
+        std::os::unix::fs::symlink(&target, dir.join(".gitignore")).unwrap();
+
+        let err = match Store::open(&repo) {
+            Ok(_) => panic!("open must fail"),
+            Err(e) => e.to_string(),
+        };
+        assert!(err.contains("symlink"), "unexpected error: {err}");
+        assert!(!target.exists(), "write must not follow the link");
+
+        std::fs::remove_dir_all(&repo).ok();
+        std::fs::remove_dir_all(target.parent().unwrap()).ok();
     }
 
     #[tokio::test]

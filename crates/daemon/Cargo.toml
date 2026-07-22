@@ -30,6 +30,9 @@ rust-embed = { version = "8", features = ["debug-embed", "interpolate-folder-pat
 mime_guess = "2"
 
 toml = "0.8"
+# Secure temp dirs for the throwaway git index: unique 0700 dir, no
+# predictable PID/timestamp paths (TOCTOU-safe), auto-cleanup on drop.
+tempfile = "3"
 
 # .diffthing/ review-state persistence. `bundled` compiles SQLite from source
 # so release cross-compiles need no system libsqlite3.
