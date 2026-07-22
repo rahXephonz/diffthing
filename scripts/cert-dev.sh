@@ -19,6 +19,11 @@ if ! command -v mkcert >/dev/null 2>&1; then
   exit 1
 fi
 
+# Limit mkcert to the system trust store. Without this, a stray JAVA_HOME makes
+# mkcert invoke `keytool` for the Java store and error out, and it would also
+# touch Firefox's NSS store — neither is what a macOS Safari/Chrome dev needs.
+export TRUST_STORES="${TRUST_STORES:-system}"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CERT_DIR="$ROOT/.certs-dev"
 CERT="$CERT_DIR/local.diffthing.dev.pem"
@@ -26,9 +31,14 @@ KEY="$CERT_DIR/local.diffthing.dev-key.pem"
 
 mkdir -p "$CERT_DIR"
 
-# Install the local CA into the system/browser trust stores. Idempotent —
-# a no-op once already installed.
-mkcert -install
+# Install the local CA into the system/browser trust stores. Idempotent.
+# Non-fatal: on macOS this needs admin auth (sudo/keychain); if it can't get a
+# terminal we still generate + serve, and the user runs `mkcert -install` once
+# themselves. Browsers only trust the cert after that step succeeds.
+if ! mkcert -install; then
+  echo "cert-dev: could not auto-install the local CA (needs admin auth)." >&2
+  echo "          run 'mkcert -install' once in a terminal, then browsers will trust it." >&2
+fi
 
 # (Re)generate only when missing so repeat runs stay fast.
 if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
