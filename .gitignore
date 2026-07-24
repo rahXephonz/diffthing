@@ -20,3 +20,5 @@ npm/diffthing-*/
 # from scripts/cert-prod.sh. Only certs/README.md is tracked.
 crates/daemon/certs/*.pem
 crates/daemon/certs/*.key.pem
+# TypeScript incremental build info (regenerated on build)
+*.tsbuildinfo
