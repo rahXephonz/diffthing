@@ -120,6 +120,74 @@ jobs:
           path: npm/diffthing-*
           if-no-files-found: error
 
+      # Raw binary archives for the shell/PowerShell installers (install.sh /
+      # install.ps1) and for downstream package managers (Homebrew, Scoop,
+      # cargo-binstall). Built here on the native runner so the +x bit is
+      # preserved inside the tarball (upload-artifact strips mode bits, but a
+      # tar/zip blob carries its own). tar.gz on Unix, zip on Windows.
+      - name: Archive release binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+            cp "target/${{ matrix.target }}/release/diffthing.exe" dist/diffthing.exe
+            (cd dist && 7z a "diffthing-${{ matrix.target }}.zip" diffthing.exe >/dev/null && rm diffthing.exe)
+          else
+            cp "target/${{ matrix.target }}/release/diffthing" dist/diffthing
+            chmod +x dist/diffthing
+            tar -C dist -czf "dist/diffthing-${{ matrix.target }}.tar.gz" diffthing
+            rm dist/diffthing
+          fi
+
+      - name: Upload release archive artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/diffthing-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  release-assets:
+    name: Attach GitHub Release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach binaries to the release
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum diffthing-* | tee SHA256SUMS
+
+      # release-plz creates the GitHub Release for this tag on push to main.
+      # That can race the tag-triggered run below, so wait for the release,
+      # then attach the raw binaries + checksums. --clobber keeps re-runs
+      # idempotent. gh infers the repo from GITHUB_REPOSITORY; no checkout
+      # needed. Create the release ourselves only if it never appears (e.g.
+      # a manually pushed tag on a fork without release-plz).
+      - name: Attach assets to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          for i in $(seq 1 30); do
+            if gh release view "$tag" >/dev/null 2>&1; then
+              break
+            fi
+            echo "waiting for release $tag to exist ($i/30)..."
+            sleep 10
+          done
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag not found after wait; creating it"
+            gh release create "$tag" --title "$tag" --generate-notes
+          fi
+          gh release upload "$tag" dist/diffthing-* dist/SHA256SUMS --clobber
+
   publish:
     name: Publish to npm
     needs: build

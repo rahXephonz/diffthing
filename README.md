@@ -46,6 +46,25 @@ npm install -g diffthing
 diffthing
 ```
 
+No Node/npm? Use the one-line installer. It downloads the prebuilt binary for
+your platform from the latest GitHub release, verifies its SHA-256 checksum,
+and installs to `~/.local/bin`:
+
+```bash
+curl -fsSL https://diffthing.dev/install.sh | sh
+```
+
+Windows (PowerShell), installs to `%LOCALAPPDATA%\diffthing\bin`:
+
+```powershell
+irm https://diffthing.dev/install.ps1 | iex
+```
+
+Pin a version or install location with `DIFFTHING_VERSION` /
+`DIFFTHING_INSTALL_DIR`. Binaries and a `SHA256SUMS` file are attached to every
+[GitHub release](https://github.com/rahXephonz/diffthing/releases) for manual
+download.
+
 The npm build ships a prebuilt binary with the review UI embedded. It serves
 the UI over **HTTPS via `local.diffthing.dev`**, a domain whose public DNS
 resolves to `127.0.0.1` — so the page loads from your own machine and the
