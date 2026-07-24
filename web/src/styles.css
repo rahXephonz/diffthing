@@ -44,6 +44,17 @@ body {
   font: 14px/1.6 var(--font-sans);
 }
 
+/* Hide native scrollbars everywhere while keeping scroll behavior. The diff
+   and scope panes carry their own visual affordances; the OS chrome is noise. */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chromium / Safari */
+}
+
 /* Split-view filler: a diff line present on only one side leaves the opposite
    cell empty. A faint diagonal hatch marks it as "no line here" (GitHub-style)
    instead of a blank the eye reads as real, aligned content. */
