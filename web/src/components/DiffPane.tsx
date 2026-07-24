@@ -385,7 +385,12 @@ export default function DiffPane({
               >
                 <div
                   className={clsx(
-                    viewMode === "split" && line !== null && "ml-[50%] w-[50%] box-border",
+                    // Split view: a comment box must never span both columns.
+                    // Constrain to one column's width; line-level threads sit
+                    // in the right (new-side) half, hunk-level ones stay
+                    // left-aligned under the header.
+                    viewMode === "split" && "w-[50%] box-border",
+                    viewMode === "split" && line !== null && "ml-[50%]",
                   )}
                 >
                   <CommentThread
@@ -468,7 +473,7 @@ export default function DiffPane({
               <div
                 className={clsx(
                   "group relative flex flex-1 font-code text-[13px] whitespace-pre overflow-x-auto",
-                  left && ROW_BG[left.type],
+                  left ? ROW_BG[left.type] : "diff-gap",
                 )}
               >
                 <span
@@ -489,7 +494,7 @@ export default function DiffPane({
               <div
                 className={clsx(
                   "group relative flex flex-1 font-code text-[13px] whitespace-pre overflow-x-auto",
-                  right && ROW_BG[right.type],
+                  right ? ROW_BG[right.type] : "diff-gap",
                 )}
               >
                 {right && (
