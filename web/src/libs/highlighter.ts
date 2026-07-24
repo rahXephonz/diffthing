@@ -1,4 +1,5 @@
 import { createHighlighter, type Highlighter, type ThemedToken } from "shiki";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import htbTheme from "./htbShikiTheme.json";
 
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -15,6 +16,13 @@ export function getHighlighter(): Promise<Highlighter> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       themes: [htbTheme as any],
       langs: ["text"],
+      // Pure-JS regex engine, not the default WASM (oniguruma) one. The daemon
+      // serves the SPA under a strict CSP (`script-src 'self'`, no
+      // 'wasm-unsafe-eval'), which blocks WebAssembly.instantiate — the WASM
+      // engine would reject createHighlighter and every diff would fall back to
+      // plain monochrome text. The JS engine needs no WASM, so highlighting
+      // works without loosening the CSP.
+      engine: createJavaScriptRegexEngine(),
     });
   }
   return highlighterPromise;
