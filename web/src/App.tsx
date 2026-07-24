@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Landing from "./components/Landing";
+import CommandPalette from "./components/CommandPalette";
 import ReviewContent from "./components/ReviewContent";
 import { Kbd } from "./components/ReviewChrome";
 import ReviewSidebar from "./components/ReviewSidebar";
@@ -16,6 +17,7 @@ export default function App() {
   const { setConn, onServerMsg, selectStep } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>("unified");
   const [filter, setFilter] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     const { send, close } = connect(parseFragment(location.hash), setConn, onServerMsg);
@@ -93,6 +95,14 @@ export default function App() {
   });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // Cmd/Ctrl+P: quick-open file palette. Checked before the typing guard
+      // so it works from any field, and preventDefault overrides the browser
+      // print dialog.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
       const target = event.target as HTMLElement;
       const typing =
         target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
@@ -184,7 +194,18 @@ export default function App() {
     .forEach((item, i) => stepNumber.set(item.id, i + 1));
 
   return (
-    <div className="grid grid-cols-[320px_1fr] h-screen">
+    <>
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        files={files}
+        iconsVersion={iconsVersion}
+        onOpenFile={(path) => {
+          const id = stepForFile.get(path);
+          if (id) selectStep(id);
+        }}
+      />
+      <div className="grid grid-cols-[320px_1fr] h-screen">
       <ReviewSidebar
         daemonVersion={conn.daemonVersion}
         llm={conn.llm}
@@ -221,6 +242,7 @@ export default function App() {
         onViewModeChange={setViewMode}
         send={(message) => sendRef.current(message)}
       />
-    </div>
+      </div>
+    </>
   );
 }

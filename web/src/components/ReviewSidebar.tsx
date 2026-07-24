@@ -286,7 +286,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
         </button>
         <div className="text-[10px] text-muted/70">
           <Kbd>j</Kbd>/<Kbd>k</Kbd> steps · <Kbd>n</Kbd>/<Kbd>p</Kbd> hunks · <Kbd>v</Kbd> mark
-          viewed · <Kbd>/</Kbd> search
+          viewed · <Kbd>/</Kbd> search · <Kbd>⌘</Kbd><Kbd>p</Kbd> open file
         </div>
       </footer>
     </aside>
