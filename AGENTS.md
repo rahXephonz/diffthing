@@ -17,6 +17,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing protocol, reco
 ## Working rules
 
 - Preserve user changes and unrelated dirty files.
+- For debug, explore, refactor, or review tasks, invoke the matching `.agents/skills` workflow (`debug-issue`, `explore-codebase`, `refactor-safely`, `review-changes`) — they drive the `code-review-graph` MCP for token-cheap, impact-aware navigation. Fall back to `rg` when graph data is missing or stale.
 - Use `rg` for search.
 - Keep protocol source in Rust. Regenerate TypeScript with `pnpm protocol:generate`.
 - Add tests for core state transitions and bug fixes.
