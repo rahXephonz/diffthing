@@ -26,10 +26,7 @@ export function Highlight({ text, query }: { text: string; query: string }) {
   for (let at = lower.indexOf(needle, from); at !== -1; at = lower.indexOf(needle, from)) {
     if (at > from) parts.push(text.slice(from, at));
     parts.push(
-      <mark
-        key={`${at}-${needle}`}
-        className="bg-green/20 text-green rounded-[2px] px-[1px] -mx-[1px]"
-      >
+      <mark key={`${at}-${needle}`} className="bg-green/20 text-green rounded-xs px-px -mx-px">
         {text.slice(at, at + needle.length)}
       </mark>,
     );
