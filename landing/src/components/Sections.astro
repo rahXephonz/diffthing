@@ -1,0 +1,492 @@
+---
+import {
+  REVEAL, EYEBROW, SECTION_TITLE, LEAD, BTN_PRIMARY, BTN_GHOST, HERO_CTA,
+  MOCK, MOCK_BAR, MOCK_DOT, MOCK_T, MOCK_BODY,
+  SCOPE, S_EYEBROW, S_TITLE, S_FILES, S_FILE, S_FILE_IC, CNT, CHIP, CHIP_HI, NUM, ADD, DEL, ACID,
+  FEATURE, F_TEXT_FLIP, F_H3, F_P, F_EYEBROW, F_POINTS, F_LI, F_LI_SVG,
+  FOCUS_ROW, FOCUS_LABEL, PROGRESS, PROGRESS_BAR, APPR_FILE, TICK, TICK_PENDING, BIGBTN,
+  DIFF_SPLIT, DIFF_CTX, DIFF_LN, DIFF_ADD, DIFF_DEL, GAP_HATCH,
+  STAGE, SPAN2, IDX, STAGE_H3, STAGE_P, SHOT_IMG,
+  SEC_CARD, SEC_ICO, SEC_H3, SEC_P,
+  CMP_HEAD, CMP_ROW, CMP_CRIT_HEAD, CMP_TRAD_HEAD, CMP_YOU_HEAD, CMP_CRIT, CMP_TRAD, CMP_YOU, CMP_LAST, CMP_YOU_SVG,
+  TAB, TERM_BODY, TERM_CMT, TERM_PR, TERM_CMD, TERM_OUT, COPY, CLI,
+  TIMELINE, TL, TL_DONE, TL_H4, TL_P, TL_VER, ROAD_COL_H3,
+} from "../lib/ui";
+import IsoArt from "./IsoArt.astro";
+import clsx from "clsx";
+
+const ART = "my-2 h-40 w-full text-faint transition-colors duration-700 group-[.lit]:text-acid-ink";
+
+const CLIS: [string, string][] = [
+  ["claude", "Claude"],
+  ["codex", "Codex"],
+  ["gemini", "Gemini"],
+  ["kimi", "Kimi"],
+  ["qwen", "Qwen"],
+  ["opencode", "OpenCode"],
+];
+---
+<section id="problem" class="wrap">
+  <div class="grid grid-cols-[0.9fr_1.1fr] items-start gap-[clamp(28px,6vw,80px)] max-[820px]:grid-cols-1">
+    <div class={REVEAL}>
+      <span class={EYEBROW}>The problem</span>
+      <h2 class={SECTION_TITLE}>Git diffs were built for humans, not agents.</h2>
+      <p class="text-lg text-white/50" style="margin-top: 20px">
+        A person edits a few files with intent. An agent rewrites twelve at once — fast, wide, and
+        flat. The unified patch that served hand-written commits collapses under that volume, and
+        review quietly becomes skimming.
+      </p>
+    </div>
+    <div class={clsx("flex flex-col gap-0.5 border-t border-line", REVEAL)} data-d="1">
+      <div class="grid grid-cols-[44px_1fr] gap-4 border-b border-line py-5.5">
+        <span class="font-mono text-2xl text-acid-ink">01</span>
+        <div>
+          <h3 class="mb-1.5 text-[1.15rem] tracking-[-0.01em]">Volume outruns attention</h3>
+          <p class="m-0 text-[0.97rem] text-muted">
+            Dozens of unrelated hunks land in one patch. Nothing tells you which three actually
+            carry risk, so every line gets the same tired glance.
+          </p>
+        </div>
+      </div>
+      <div class="grid grid-cols-[44px_1fr] gap-4 border-b border-line py-5.5">
+        <span class="font-mono text-2xl text-acid-ink">02</span>
+        <div>
+          <h3 class="mb-1.5 text-[1.15rem] tracking-[-0.01em]">No structure, no priority</h3>
+          <p class="m-0 text-[0.97rem] text-muted">
+            A flat file-ordered list has no notion of what belongs together or what matters most.
+            Related changes scatter; the important ones hide among the trivial.
+          </p>
+        </div>
+      </div>
+      <div class="grid grid-cols-[44px_1fr] gap-4 border-b border-line py-5.5">
+        <span class="font-mono text-2xl text-acid-ink">03</span>
+        <div>
+          <h3 class="mb-1.5 text-[1.15rem] tracking-[-0.01em]">State resets on every edit</h3>
+          <p class="m-0 text-[0.97rem] text-muted">
+            The agent keeps editing while you review. Line numbers shift, your place is lost, and
+            “already looked at that” evaporates. So the change ships half-read.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================  HOW IT WORKS  =================== -->
+<section id="how" class="theme-light">
+  <div class="wrap">
+  <div class={REVEAL} style="max-width: 620px">
+    <span class={EYEBROW}>How it works</span>
+    <h2 class={SECTION_TITLE}>A deterministic pipeline, not a black box.</h2>
+    <p class={LEAD} style="margin-top: 18px">
+      The LLM only proposes structure. Code decides what’s risky, verifies the walkthrough covers
+      every hunk exactly once, and falls back to file order if the model misbehaves.
+    </p>
+  </div>
+
+  <div class={clsx("pipe mt-[clamp(40px,7vw,72px)] grid grid-cols-4 gap-3 max-[820px]:grid-cols-1", REVEAL)} data-d="1">
+    <div class={clsx(STAGE, SPAN2)} data-stage>
+      <span class={IDX}>01</span>
+      <IsoArt name="diff" class={ART} />
+      <h3 class={STAGE_H3}>Git Diff</h3>
+      <p class={STAGE_P}>Working-tree changes parsed into hunks, keyed by content hash.</p>
+    </div>
+    <div class={STAGE} data-stage>
+      <span class={IDX}>02</span>
+      <IsoArt name="score" class={ART} />
+      <h3 class={STAGE_H3}>Deterministic Scoring</h3>
+      <p class={STAGE_P}>Impact scored by code — never the model. Risk stays reproducible.</p>
+    </div>
+    <div class={STAGE} data-stage>
+      <span class={IDX}>03</span>
+      <IsoArt name="cubes" class={ART} />
+      <h3 class={STAGE_H3}>LLM Walkthrough</h3>
+      <p class={STAGE_P}>Your installed agent groups hunks into named scopes and ordered.</p>
+    </div>
+    <div class={clsx(STAGE, SPAN2)} data-stage>
+      <span class={IDX}>04</span>
+      <IsoArt name="check" class={ART} />
+      <h3 class={STAGE_H3}>Validator</h3>
+      <p class={STAGE_P}>Every hunk covered once, only real hunks referenced — or retry, then fallback.</p>
+    </div>
+    <div class={clsx(STAGE, SPAN2)} data-stage>
+      <span class={IDX}>05</span>
+      <IsoArt name="fan" class={ART} />
+      <h3 class={STAGE_H3}>Review UI</h3>
+      <p class={STAGE_P}>Streamed to your browser over a token-gated, loopback-only WebSocket.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================  PHILOSOPHY  =================== -->
+<section class="wrap text-center pt-[clamp(90px,16vw,200px)] pb-[clamp(90px,16vw,200px)]">
+  <h2 class={clsx("text-[clamp(2.6rem,9vw,7rem)] leading-[1.08] tracking-[-0.045em]", REVEAL)}>
+    AI organizes.<br /><span class="text-faint">Humans </span><span class="box-decoration-clone whitespace-nowrap bg-acid px-2 -mx-2 text-[#0a0a0b]">judge</span><span class="text-faint">.</span>
+  </h2>
+  <p class={clsx("mx-auto mt-7.5 max-w-[54ch] text-[1.05rem] text-muted", REVEAL)} data-d="1">
+    The product boundary never moves. AI organizes and executes explicit requests. It never
+    approves, rejects, or scores correctness. Every judgment on the page is yours.
+  </p>
+</section>
+
+<!-- ===================  PRODUCT WALKTHROUGH  =================== -->
+<section id="product" class="theme-light" style="padding-bottom: 0">
+  <div class="wrap">
+  <div class={REVEAL} style="max-width: 620px">
+    <span class={EYEBROW}>The product</span>
+    <h2 class={SECTION_TITLE}>Built for the way agents actually change code.</h2>
+  </div>
+
+  <!-- 1 Review focus -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div>
+      <span class={F_EYEBROW}>Review focus</span>
+      <h3 class={F_H3}>Start with what matters.</h3>
+      <p class={F_P}>
+        Every session opens with an AI-written focus note and a live progress meter — so you know
+        where the risk sits before you read a single line.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Narrative framing of the whole change</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Unviewed count and staged progress at a glance</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>review focus</span></div>
+      <div class={MOCK_BODY}>
+        <div class={FOCUS_ROW}>
+          <span class={FOCUS_LABEL}>Review focus</span>
+          Review order tracks the release path from publish to consumption: the npm workflow first,
+          then the install scripts users run, then the web highlighter tweaks.
+        </div>
+        <div class={FOCUS_ROW}>
+          <span class={FOCUS_LABEL}>Progress</span>
+          <span class={ACID}>18</span> of 28 hunks viewed · 4 files staged
+          <div class={PROGRESS}><i class={PROGRESS_BAR}></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 Prioritized walkthrough -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div class={F_TEXT_FLIP}>
+      <span class={F_EYEBROW}>Prioritized walkthrough</span>
+      <h3 class={F_H3}>Scopes and steps, ordered by impact.</h3>
+      <p class={F_P}>
+        Related hunks group into named scopes and numbered steps. Deterministic impact chips tell
+        you which step to read first — and which you can skim.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Keyboard-driven: <code class="font-mono">j</code>/<code class="font-mono">k</code> steps, <code class="font-mono">n</code>/<code class="font-mono">p</code> hunks</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Impact never set by the model</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>walkthrough</span></div>
+      <div class={clsx(MOCK_BODY, "flex flex-col gap-2.5")}>
+        <div class={SCOPE}>
+          <span class={S_EYEBROW}>Web rendering</span>
+          <div class={S_TITLE}><span class={NUM}>02</span> Fix diff highlighting under CSP <span class={CHIP_HI}>high</span></div>
+          <div class={S_FILES}><div class={S_FILE}><span class={S_FILE_IC}></span>highlighter.ts <span class={clsx(CNT, ADD)}>+8</span></div></div>
+        </div>
+        <div class={SCOPE}>
+          <span class={S_EYEBROW}>Command palette</span>
+          <div class={S_TITLE}><span class={NUM}>03</span> Cmd+P file quick-open <span class={CHIP}>low</span></div>
+          <div class={S_FILES}><div class={S_FILE}><span class={S_FILE_IC}></span>App.tsx <span class={CNT}><span class={ADD}>+24</span> <span class={DEL}>−2</span></span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 Split & unified diffs -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div>
+      <span class={F_EYEBROW}>Split &amp; unified diffs</span>
+      <h3 class={F_H3}>Read it the way you think.</h3>
+      <p class={F_P}>
+        Toggle split or unified, syntax-highlighted, with one-sided rows marked by a diagonal hatch
+        so an empty cell never reads as real, aligned code.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Per-line comment anchors, GitHub-style</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Highlighting works fully offline under a strict CSP</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>DiffPane.tsx · split</span></div>
+      <div class={MOCK_BODY}>
+        <div class={DIFF_SPLIT}>
+          <div class="border-r border-line px-1.5 py-1">
+            <div class={DIFF_CTX}><span class={DIFF_LN}>27</span>if (at &gt; from)</div>
+            <div class={DIFF_DEL}><span class={DIFF_LN}>28</span>&lt;mark className=</div>
+            <div class={DIFF_DEL}><span class={DIFF_LN}>29</span>  "rounded-[2px]"&gt;</div>
+            <div class={DIFF_CTX}><span class={DIFF_LN}>30</span>&#123;text.slice(at)&#125;</div>
+          </div>
+          <div class="px-1.5 py-1">
+            <div class={DIFF_CTX}><span class={DIFF_LN}>27</span>if (at &gt; from)</div>
+            <div class={DIFF_ADD}><span class={DIFF_LN}>28</span>&lt;mark className=</div>
+            <div class={GAP_HATCH}></div>
+            <div class={DIFF_CTX}><span class={DIFF_LN}>29</span>&#123;text.slice(at)&#125;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 Command palette -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div class={F_TEXT_FLIP}>
+      <span class={F_EYEBROW}>Command palette</span>
+      <h3 class={F_H3}>Jump anywhere with <code class="font-mono">⌘P</code>.</h3>
+      <p class={F_P}>
+        Fuzzy-open any changed file by name or path, with format-aware icons, live keyword
+        highlighting, and change counts. Enter navigates straight to the owning step.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Ranked basename → path matching</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Full keyboard control, no mouse required</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>⌘P</span></div>
+      <img src="/images/preview-search.png" alt="Command palette open over the review UI, listing changed files with format icons, highlighted matches, change counts, and status letters." class={SHOT_IMG} loading="lazy" width="1699" height="964" />
+    </div>
+  </div>
+
+  <!-- 5 Threaded comments -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div>
+      <span class={F_EYEBROW}>Threaded comments</span>
+      <h3 class={F_H3}>Ask the agent, in place.</h3>
+      <p class={F_P}>
+        Anchor a question or a change request to any hunk and send it to your active CLI. The
+        agent’s reply lands as a thread entry — it never resolves anything on its own.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Questions get answers with no edits unless you ask</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Out-of-scope edits are rolled back and reported</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>CommandPalette.tsx · thread</span></div>
+      <img src="/images/preview-agent.png" alt="A threaded comment on a hunk: the reviewer asks the agent to remove a comment, the agent replies and reports what it changed, and the human still resolves the thread." class={SHOT_IMG} loading="lazy" width="1701" height="967" />
+    </div>
+  </div>
+
+  <!-- 6 Approval tracking -->
+  <div class={clsx(FEATURE, REVEAL)}>
+    <div class={F_TEXT_FLIP}>
+      <span class={F_EYEBROW}>Approval tracking</span>
+      <h3 class={F_H3}>The Git index is your approval ledger.</h3>
+      <p class={F_P}>
+        Review state is keyed by content hash, so it survives edits and line shifts. A file stages
+        only when all its hunks are viewed and no comment is open.
+      </p>
+      <ul class={F_POINTS}>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Viewed, changed-since-viewed, commented, resolved</li>
+        <li class={F_LI}><svg class={F_LI_SVG} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Persists across restarts and sessions</li>
+      </ul>
+    </div>
+    <div class={MOCK}>
+      <div class={MOCK_BAR}><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_T}>approval</span></div>
+      <div class={MOCK_BODY}>
+        <div class={APPR_FILE}><span class={TICK}>✓</span>install.sh <span class={clsx(CNT, ADD)}>+114</span></div>
+        <div class={APPR_FILE}><span class={TICK}>✓</span>release-npm.yml <span class={clsx(CNT, ADD)}>+68</span></div>
+        <div class={APPR_FILE}><span class={TICK_PENDING}>○</span>DiffPane.tsx <span class={CNT}><span class={ADD}>+8</span> <span class={DEL}>−3</span></span></div>
+        <div class={APPR_FILE}><span class={TICK_PENDING}>○</span>App.tsx <span class={CNT}><span class={ADD}>+24</span> <span class={DEL}>−2</span></span></div>
+        <div class={BIGBTN}>✓✓ Mark all reviewed (28)</div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- ===================  SECURITY  =================== -->
+<section id="security" class="wrap">
+  <div class={REVEAL} style="max-width: 620px">
+    <span class={EYEBROW}>Security &amp; trust</span>
+    <h2 class={SECTION_TITLE}>Everything stays on your machine.</h2>
+    <p class={LEAD} style="margin-top: 18px">
+      No account, no cloud, no telemetry. Diffthing binds to loopback, gates its WebSocket with an
+      ephemeral token, and drives the agents you already trust.
+    </p>
+  </div>
+  <div class={clsx("mt-[clamp(36px,6vw,60px)] grid grid-cols-3 gap-px overflow-hidden rounded-[14px] border border-line bg-line max-[820px]:grid-cols-1", REVEAL)} data-d="1">
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2" /><circle cx="12" cy="14" r="2" /><path d="M8 8V6a4 4 0 0 1 8 0v2" /></svg></div>
+      <h3 class={SEC_H3}>Local-first</h3>
+      <p class={SEC_P}>A Rust daemon bound to 127.0.0.1 with the review UI embedded. Nothing leaves the host.</p>
+    </div>
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 0-9h-1.3A7 7 0 1 0 4 15.3" /><path d="m12 12-3 3 3 3" /><path d="M9 15h9" /></svg></div>
+      <h3 class={SEC_H3}>No cloud dependency</h3>
+      <p class={SEC_P}>No sign-in, no server round-trip, no telemetry. Works fully offline with <code class="font-mono">--offline</code>.</p>
+    </div>
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg></div>
+      <h3 class={SEC_H3}>Uses installed AI CLIs</h3>
+      <p class={SEC_P}>Drives the agent already authenticated on your machine. Diffthing never stores a provider key.</p>
+    </div>
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></svg></div>
+      <h3 class={SEC_H3}>Deterministic validation</h3>
+      <p class={SEC_P}>The model’s walkthrough must pass code checks — cover every hunk once, reference only real ones.</p>
+    </div>
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg></div>
+      <h3 class={SEC_H3}>Git index as ledger</h3>
+      <p class={SEC_P}>Approval is a real Git action: fully reviewed files move to staged. Your VCS is the source of truth.</p>
+    </div>
+    <div class={SEC_CARD}>
+      <div class={SEC_ICO}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></div>
+      <h3 class={SEC_H3}>Human approval required</h3>
+      <p class={SEC_P}>Agent claims become thread entries, never approvals. Nothing merges on silence.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================  COMPARISON  =================== -->
+<section class="theme-light">
+  <div class="wrap">
+  <div class={REVEAL} style="max-width: 620px">
+    <span class={EYEBROW}>Comparison</span>
+    <h2 class={SECTION_TITLE}>Flat patch vs. organized review.</h2>
+  </div>
+  <div class={clsx("mt-[clamp(36px,6vw,60px)] overflow-hidden rounded-[14px] border border-line", REVEAL)} data-d="1">
+    <div class={CMP_HEAD}>
+      <div class={CMP_CRIT_HEAD}>Capability</div>
+      <div class={CMP_TRAD_HEAD}>Traditional Git diff</div>
+      <div class={CMP_YOU_HEAD}>Diffthing</div>
+    </div>
+    <div class={CMP_ROW}>
+      <div class={CMP_CRIT}>Structure</div>
+      <div class={CMP_TRAD}>Flat, file-ordered hunks</div>
+      <div class={CMP_YOU}><svg class={CMP_YOU_SVG} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Named scopes, ordered steps</div>
+    </div>
+    <div class={CMP_ROW}>
+      <div class={CMP_CRIT}>Prioritization</div>
+      <div class={CMP_TRAD}>None — every line equal</div>
+      <div class={CMP_YOU}><svg class={CMP_YOU_SVG} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Deterministic impact scoring</div>
+    </div>
+    <div class={CMP_ROW}>
+      <div class={CMP_CRIT}>Review state</div>
+      <div class={CMP_TRAD}>Lost on every re-edit</div>
+      <div class={CMP_YOU}><svg class={CMP_YOU_SVG} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Reconciled by content hash</div>
+    </div>
+    <div class={CMP_ROW}>
+      <div class={CMP_CRIT}>Agent dialogue</div>
+      <div class={CMP_TRAD}>Copy-paste to a chat window</div>
+      <div class={CMP_YOU}><svg class={CMP_YOU_SVG} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Anchored, in-context threads</div>
+    </div>
+    <div class={CMP_ROW}>
+      <div class={clsx(CMP_CRIT, CMP_LAST)}>Approval</div>
+      <div class={clsx(CMP_TRAD, CMP_LAST)}>Manual, informal</div>
+      <div class={clsx(CMP_YOU, CMP_LAST)}><svg class={CMP_YOU_SVG} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Git index as approval ledger</div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- ===================  INSTALL / DX  =================== -->
+<section id="install" class="wrap">
+  <div class="grid grid-cols-2 items-start gap-[clamp(28px,5vw,56px)] max-[860px]:grid-cols-1">
+    <div class={REVEAL}>
+      <span class={EYEBROW}>Developer experience</span>
+      <h2 class={SECTION_TITLE}>Running in one line.</h2>
+      <p class={LEAD} style="margin: 18px 0 24px">
+        Ship it however you like — npm, a raw binary, or Windows. Then diffthing drives the AI CLI
+        you already have.
+      </p>
+      <div class="mb-3.5 flex flex-wrap gap-1.5" role="tablist" aria-label="install method">
+        <button class={clsx(TAB, "inline-flex items-center gap-2")} role="tab" aria-selected="true" data-tab="npx"><img src="/svg/logos/npx.svg" alt="" class="h-3.5 w-auto opacity-80" />npx</button>
+        <button class={clsx(TAB, "inline-flex items-center gap-2")} role="tab" aria-selected="false" data-tab="curl"><img src="/svg/logos/curl.svg" alt="" class="h-3.5 w-auto opacity-80" />curl</button>
+        <button class={clsx(TAB, "inline-flex items-center gap-2")} role="tab" aria-selected="false" data-tab="ps"><img src="/svg/logos/ps.svg" alt="" class="h-3.5 w-auto opacity-80" />PowerShell</button>
+      </div>
+      <div class="overflow-hidden rounded-xl border border-line bg-panel">
+        <div class={MOCK_BAR}>
+          <span class={MOCK_DOT}></span><span class={MOCK_DOT}></span><span class={MOCK_DOT}></span>
+          <span class={COPY} id="copyBtn">copy</span>
+        </div>
+        <div class={TERM_BODY} id="termBody">
+          <div class={TERM_CMT}># no install — run in any Git repo</div>
+          <div><span class={TERM_PR}>$</span> <span class={TERM_CMD}>npx diffthing</span></div>
+          <div class={TERM_OUT}>reviewing . against HEAD · llm claude</div>
+          <div class={TERM_OUT}>✓ ready — open https://local.diffthing.dev</div>
+        </div>
+      </div>
+    </div>
+
+    <div class={REVEAL} data-d="1">
+      <div class="mb-4 font-mono text-xs uppercase tracking-widest text-muted">Supported AI CLIs</div>
+      <div class="grid grid-cols-3 gap-2.5">
+        {CLIS.map(([slug, label]) => (
+          <div class="group flex items-center justify-center rounded-lg border border-line bg-panel py-5 transition-colors duration-200 hover:border-line2">
+            <img
+              src={`/svg/logos/${slug}.svg`}
+              alt={label}
+              title={label}
+              class="h-6 w-auto opacity-60 transition-opacity duration-200 group-hover:opacity-100"
+              loading="lazy"
+            />
+          </div>
+        ))}
+      </div>
+      <p class={LEAD} style="margin-top: 18px; font-size: 0.9rem">
+        Auto-selected from your active session, config, or the first CLI on your PATH. Force one
+        with <code class="font-mono">--llm</code>. Falls back to deterministic file order if none is
+        present.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================  ROADMAP  =================== -->
+<section class="wrap">
+  <div class={REVEAL} style="max-width: 620px">
+    <span class={EYEBROW}>Roadmap</span>
+    <h2 class={SECTION_TITLE}>Shipped, and what’s next.</h2>
+  </div>
+  <div class={clsx("mt-[clamp(36px,6vw,60px)] grid grid-cols-2 gap-[clamp(24px,5vw,56px)] max-[780px]:grid-cols-1", REVEAL)} data-d="1">
+    <div>
+      <h3 class={ROAD_COL_H3}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-acid)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>Shipped</h3>
+      <div class={TIMELINE}>
+        <div class={TL_DONE}><span class={TL_VER}>v0.1–0.2</span><h4 class={TL_H4}>Deterministic review core</h4><p class={TL_P}>Scoring, validation, reconciliation, generated wire protocol.</p></div>
+        <div class={TL_DONE}><span class={TL_VER}>v0.2</span><h4 class={TL_H4}>npm distribution &amp; prebuilt binaries</h4><p class={TL_P}><code class="font-mono">npx diffthing</code> across macOS, Linux, Windows.</p></div>
+        <div class={TL_DONE}><span class={TL_VER}>v0.2</span><h4 class={TL_H4}>Trusted local HTTPS &amp; persistence</h4><p class={TL_P}>Zero-prompt <code class="font-mono">local.diffthing.dev</code>; review state across restarts.</p></div>
+        <div class={TL_DONE}><span class={TL_VER}>v0.3</span><h4 class={TL_H4}>One-line shell installer</h4><p class={TL_P}>Release-asset binaries, checksum-verified <code class="font-mono">install.sh</code> / <code class="font-mono">.ps1</code>.</p></div>
+        <div class={TL_DONE}><span class={TL_VER}>v0.3</span><h4 class={TL_H4}>Command palette</h4><p class={TL_P}><code class="font-mono">⌘P</code> quick-open with icons and keyword highlighting.</p></div>
+      </div>
+    </div>
+    <div>
+      <h3 class={ROAD_COL_H3}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></svg>Upcoming</h3>
+      <div class={TIMELINE}>
+        <div class={TL}><span class={TL_VER}>next</span><h4 class={TL_H4}>VS Code extension</h4><p class={TL_P}>Open a review from the palette, jump to <code class="font-mono">file:line</code>, comment inline.</p></div>
+        <div class={TL}><span class={TL_VER}>next</span><h4 class={TL_H4}>Commit &amp; PR workflow</h4><p class={TL_P}>Generate the message from approved walkthrough content — what you signed off on.</p></div>
+        <div class={TL}><span class={TL_VER}>next</span><h4 class={TL_H4}>Stop-time review gate</h4><p class={TL_P}>When the agent claims done, surface what’s unreviewed — opt-in blocking.</p></div>
+        <div class={TL}><span class={TL_VER}>later</span><h4 class={TL_H4}>OS-level sandboxing</h4><p class={TL_P}>Repo-only filesystem, network off by default for every dispatch runner.</p></div>
+        <div class={TL}><span class={TL_VER}>later</span><h4 class={TL_H4}>Repository memory</h4><p class={TL_P}>Learn repo conventions and prior decisions — local, under your control.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================  FINAL CTA  =================== -->
+<section class="wrap text-center pt-[clamp(100px,18vw,220px)] pb-[clamp(100px,18vw,220px)]">
+  <h2 class={clsx("mx-auto max-w-[18ch] text-[clamp(2.4rem,8vw,6rem)] leading-[0.98] tracking-[-0.045em]", REVEAL)}>
+    Review AI-generated code with <span class="box-decoration-clone whitespace-nowrap bg-acid px-2 -mx-2 text-[#0a0a0b]">confidence.</span>
+  </h2>
+  <p class={clsx(LEAD, "mx-auto mt-6.5 text-center", REVEAL)} data-d="1">
+    Your agent writes the code. Diffthing organizes the review. You still own every approval.
+  </p>
+<div class={clsx(HERO_CTA, REVEAL, "mt-10")} data-d="2">
+      <a class={BTN_PRIMARY} href="#install">
+        Install Diffthing
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+      </a>
+      <a class={BTN_GHOST} href="https://github.com/rahXephonz/diffthing" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.48v-1.7c-2.78.62-3.37-1.2-3.37-1.2-.45-1.18-1.1-1.5-1.1-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.05 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.28 2.75 1.05a9.36 9.36 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.92-2.34 4.78-4.57 5.03.36.32.68.94.68 1.9v2.82c0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.26C22 6.58 17.52 2 12 2Z"></path></svg>
+        View on GitHub
+      </a>
+    </div>
+</section>

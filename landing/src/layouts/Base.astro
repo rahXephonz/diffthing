@@ -1,0 +1,211 @@
+---
+import "../styles/global.css";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+
+const title = "Diffthing — AI organizes the review. You approve the code.";
+const description =
+  "Diffthing transforms AI-generated code into a deterministic, prioritized review walkthrough. Local-first. Every approval remains yours.";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- No-JS / pre-hydration fallback: reveal content if motion never boots. -->
+    <script is:inline>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body>
+    <Nav />
+    <main id="top">
+      <slot />
+    </main>
+    <Footer />
+
+    <div
+      id="lightbox"
+      class="fixed inset-0 z-100 hidden cursor-zoom-out items-center justify-center bg-black/80 p-6 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-hidden="true"
+    >
+      <img id="lightbox-img" src="" alt="" class="max-h-[90vh] max-w-[92vw] rounded-xl border border-white/10 shadow-2xl" />
+    </div>
+
+    <script>
+      import Lenis from "lenis";
+      import { gsap } from "gsap";
+      import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+      gsap.registerPlugin(ScrollTrigger);
+
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const reveals = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
+
+      if (reduce) {
+        reveals.forEach((el) => el.classList.add("in"));
+      } else {
+        // ---- Lenis smooth scroll, driven by the GSAP ticker ----
+        const lenis = new Lenis({
+          duration: 1.1,
+          easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+          smoothWheel: true,
+        });
+        lenis.on("scroll", ScrollTrigger.update);
+        gsap.ticker.add((time) => lenis.raf(time * 1000));
+        gsap.ticker.lagSmoothing(0);
+
+        // anchor links -> Lenis scrollTo
+        document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
+          a.addEventListener("click", (e) => {
+            const id = a.getAttribute("href")!;
+            if (id.length < 2) return;
+            const target = document.querySelector(id);
+            if (!target) return;
+            e.preventDefault();
+            lenis.scrollTo(target as HTMLElement, { offset: -72 });
+          });
+        });
+
+        // ---- sticky nav state ----
+        const nav = document.getElementById("nav");
+        lenis.on("scroll", ({ scroll }: { scroll: number }) => {
+          nav?.classList.toggle("scrolled", scroll > 12);
+        });
+
+        // ---- scroll reveals (staggered by data-d) ----
+        ScrollTrigger.batch(reveals, {
+          start: "top 88%",
+          onEnter: (batch) =>
+            batch.forEach((el, i) =>
+              setTimeout(() => el.classList.add("in"), i * 60),
+            ),
+        });
+
+        // ---- pipeline stage light-up ----
+        const stages = gsap.utils.toArray<HTMLElement>("[data-stage]");
+        if (stages.length) {
+          ScrollTrigger.create({
+            trigger: ".pipe",
+            start: "top 70%",
+            once: true,
+            onEnter: () => stages.forEach((s, i) => setTimeout(() => s.classList.add("lit"), i * 170)),
+          });
+        }
+      }
+
+      // ---- install tabs + copy (present in the Install section) ----
+      const snippets: Record<string, [string, string][]> = {
+        npx: [
+          ["cmt2", "# no install — run in any Git repo"],
+          ["prcmd", "$ npx diffthing"],
+          ["out", "reviewing . against HEAD · llm claude"],
+          ["out", "✓ ready — open https://local.diffthing.dev"],
+        ],
+        curl: [
+          ["cmt2", "# download, verify checksum, install to ~/.local/bin"],
+          ["prcmd", "$ curl -fsSL https://diffthing.dev/install.sh | sh"],
+          ["out", "verifying checksum ✓"],
+          ["out", "installed diffthing to ~/.local/bin/diffthing"],
+        ],
+        ps: [
+          ["cmt2", "# Windows — installs to %LOCALAPPDATA%\\diffthing\\bin"],
+          ["prcmd", "> irm https://diffthing.dev/install.ps1 | iex"],
+          ["out", "verifying checksum ✓"],
+          ["out", "installed diffthing.exe"],
+        ],
+      };
+
+      const cmdFor: Record<string, string> = {
+        npx: "npx diffthing",
+        curl: "curl -fsSL https://diffthing.dev/install.sh | sh",
+        ps: "irm https://diffthing.dev/install.ps1 | iex",
+      };
+
+      const termBody = document.getElementById("termBody");
+      const copyBtn = document.getElementById("copyBtn");
+      let currentCmd = cmdFor.npx;
+
+      function renderTab(key: string) {
+        if (!termBody) return;
+        termBody.innerHTML = "";
+        for (const [cls, text] of snippets[key]) {
+          const div = document.createElement("div");
+          if (cls === "prcmd") {
+            div.innerHTML =
+              '<span class="pr">' + text.slice(0, 1) + '</span> <span class="cmd">' + text.slice(2) + "</span>";
+          } else {
+            div.className = cls;
+            div.textContent = text;
+          }
+          termBody.appendChild(div);
+        }
+        currentCmd = cmdFor[key];
+      }
+
+      document.querySelectorAll<HTMLElement>(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", "false"));
+          tab.setAttribute("aria-selected", "true");
+          renderTab(tab.dataset.tab!);
+        });
+      });
+
+      copyBtn?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(currentCmd);
+          copyBtn.textContent = "copied";
+          setTimeout(() => (copyBtn.textContent = "copy"), 1400);
+        } catch {
+          copyBtn.textContent = "select + ⌘C";
+        }
+      });
+
+      // ---- screenshot lightbox (delegated, so it also covers hydrated island imgs) ----
+      const lb = document.getElementById("lightbox");
+      const lbImg = document.getElementById("lightbox-img") as HTMLImageElement | null;
+      const closeLb = () => {
+        if (!lb) return;
+        lb.classList.add("hidden");
+        lb.classList.remove("flex");
+        lb.setAttribute("aria-hidden", "true");
+        if (lbImg) lbImg.src = "";
+        document.documentElement.style.overflow = "";
+      };
+      
+      document.addEventListener("click", (e) => {
+        if (!lb || !lbImg) return;
+        // Any click while open dismisses it.
+        if (!lb.classList.contains("hidden")) {
+          closeLb();
+          return;
+        }
+        const t = e.target;
+        if (t instanceof HTMLImageElement && t.classList.contains("shot-zoom")) {
+          lbImg.src = t.currentSrc || t.src;
+          lbImg.alt = t.alt;
+          lb.classList.remove("hidden");
+          lb.classList.add("flex");
+          lb.setAttribute("aria-hidden", "false");
+          document.documentElement.style.overflow = "hidden";
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeLb();
+      });
+    </script>
+  </body>
+</html>

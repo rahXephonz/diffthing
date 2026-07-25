@@ -1,0 +1,155 @@
+/* Diffthing landing — Tailwind v4, utility-first.
+   Design tokens live in @theme. Layout and one-off styling live as utilities in
+   the markup; only genuinely-reused UI (buttons, eyebrows, the mock frame,
+   scope/diff/timeline atoms, etc.) is kept as a small @layer components set.
+
+   Fonts: sans = DM Sans (Google Fonts <link> in the layout head — public
+   stand-in for the proprietary "Google Sans"); mono = Cascadia Code, self-hosted. */
+
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Cascadia Code";
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url("/fonts/cascadia-code.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 100 900; /* variable */
+  font-display: swap;
+  src: url("/fonts/inter-tight.woff2") format("woff2");
+}
+
+@theme {
+  /* charcoal (dark) base — the default theme */
+  --color-bg: #1c1c1c;
+  --color-bg2: #202021;
+  --color-panel: #242425;
+  --color-panel2: #2a2a2c;
+  --color-line: #363638;
+  --color-line2: #444447;
+  --color-text: #ececec;
+  --color-muted: #9a9aa0;
+  --color-faint: #6b6b72;
+  --color-acid: #b5ff3d;
+  /* accent used AS TEXT: lime in dark, dark ink in light sections */
+  --color-acid-ink: #b5ff3d;
+  --color-add: #9fe86a;
+  --color-del: #ff6b6b;
+
+  --font-sans:
+    "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+  --font-mono:
+    "Cascadia Code", ui-monospace, "SF Mono", "JetBrains Mono", "Menlo",
+    "Consolas", monospace;
+}
+
+:root {
+  --acid-dim: rgba(181, 255, 61, 0.14);
+  --acid-line: rgba(181, 255, 61, 0.35);
+  --add-bg: rgba(120, 200, 70, 0.12);
+  --del-bg: rgba(255, 90, 90, 0.1);
+}
+
+/* Light (white) section band: opaque white background + inverted tokens, so
+   every token-driven component re-themes automatically. Accent stays lime for
+   fills; accent-as-text (`text-acid-ink`) and +/- counts switch to dark ink. */
+.theme-light {
+  --color-bg: #ffffff;
+  --color-bg2: #f7f7f8;
+  --color-panel: #ffffff;
+  --color-panel2: #f4f4f5;
+  --color-line: #e6e6e9;
+  --color-line2: #d9d9de;
+  --color-text: #1c1c1c;
+  --color-muted: #5c5c63;
+  --color-faint: #9494a0;
+  --color-acid-ink: #3f6d00;
+  --color-add: #3f7d18;
+  --color-del: #cf3b3b;
+  --add-bg: rgba(63, 125, 24, 0.1);
+  --del-bg: rgba(207, 59, 59, 0.08);
+  background: var(--color-bg);
+  color: var(--color-text);
+  position: relative;
+  z-index: 1;
+}
+
+@layer base {
+  html {
+    scroll-behavior: auto; /* Lenis drives smooth scroll */
+  }
+  html:not(.js) .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+  body {
+    @apply m-0 bg-bg text-text font-sans text-base leading-relaxed;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  /* faint grid texture, fading toward the top — dense dev surface */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.7;
+    background-image:
+      linear-gradient(var(--color-line2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-line2) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(
+      ellipse 90% 70% at 50% 0%,
+      #000 35%,
+      transparent 82%
+    );
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply m-0 font-semibold leading-[1.02];
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  section {
+    @apply relative z-1;
+    padding-top: clamp(72px, 12vw, 140px);
+    padding-bottom: clamp(72px, 12vw, 140px);
+  }
+  ::selection {
+    background: var(--color-acid);
+    color: #0a0a0b;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-acid);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* content column */
+  .wrap {
+    @apply relative z-1 mx-auto w-full max-w-300 px-[clamp(20px,5vw,40px)];
+  }
+}

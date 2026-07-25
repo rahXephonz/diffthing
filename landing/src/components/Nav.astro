@@ -1,0 +1,26 @@
+---
+import { BTN_PRIMARY } from "../lib/ui";
+---
+<header
+  id="nav"
+  class="fixed inset-x-0 top-0 z-50 border-b border-transparent transition-[background,border-color] duration-300 [&.scrolled]:border-line [&.scrolled]:bg-[rgba(28,28,28,0.82)] [&.scrolled]:backdrop-blur-sm [&.scrolled]:backdrop-saturate-150"
+>
+  <div class="wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center max-[860px]:grid-cols-[1fr_auto]">
+    <a class="flex items-center gap-2 justify-self-start" href="#top" aria-label="Diffthing home">
+      <img src="/images/diffthing-logo.png" alt="" class="block h-8 w-8 select-none" width="32" height="32" />
+      <span class="text-[22px] font-semibold tracking-[-0.02em] text-text">diffthing</span>
+    </a>
+    <nav class="flex gap-10 justify-self-center font-sans text-[15px] font-semibold text-muted max-[860px]:hidden">
+      <a href="#problem" class="hover:text-text">Problem</a>
+      <a href="#how" class="hover:text-text">How it works</a>
+      <a href="#product" class="hover:text-text">Product</a>
+      <a href="#security" class="hover:text-text">Security</a>
+    </nav>
+    <div class="flex justify-self-end">
+      <a class={BTN_PRIMARY} href="#install">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+        Install
+      </a>
+    </div>
+  </div>
+</header>
