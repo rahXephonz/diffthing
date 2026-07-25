@@ -77,24 +77,10 @@ reviews and approves.** Nothing below weakens that.
 13. Distribution breadth: Homebrew tap, `cargo-binstall`, Scoop. All three
     consume the release assets published by item 7.
 14. Docs site and a 60-second demo — the value is not obvious cold.
-15. **Bundled trusted cert (Drizzle-style).** A real CA-trusted cert for
-    `local.diffthing.dev` is embedded in the binary (`crates/daemon/certs/`,
-    gated by `build.rs`) and served by default, so every browser — Safari
-    included — loads zero-prompt. Per-install self-signed remains the fallback
-    when no cert is committed. This **reverses the earlier "no shared key ships"
-    stance**: shipping the private key lets anyone who can bend a victim's
-    DNS/hosts for `local.diffthing.dev` serve trusted JS and read the ephemeral
-    fragment token. Accepted (it requires already owning the victim's name
-    resolution); `--offline` stays the zero-shared-trust path. Certificate
-    renewal is the owner's to rotate; see `certs/README.md`.
-16. **Connect UX.** Auto-open the browser to the printed URL on start, and use a
-    fixed default port (`4983`, falling back if busy) for a stable, bookmarkable
-    `https://local.diffthing.dev:4983`. Removes the bare-domain confusion. We will take it
-    in the future, for now current flow its okay.
 
 Ergonomics are what make people stay.
 
-17. OS-level sandboxing for every dispatch runner (repo-only filesystem,
+15. OS-level sandboxing for every dispatch runner (repo-only filesystem,
     network off by default) — completes the agent trust boundary beyond
     prompt fencing + per-CLI capability flags + scope rollback. Needs a
     per-platform strategy (Seatbelt on macOS, landlock/bwrap on Linux).
@@ -106,26 +92,26 @@ Generation is becoming cheap; judgment is becoming valuable. Everything here
 exists to make human judgment scale — with context and memory — never to
 replace it or automate approval.
 
-18. **Engineering memory.** Persist decisions alongside review state, not only
+16. **Engineering memory.** Persist decisions alongside review state, not only
     viewed/resolved status: why a comment was resolved, why an approach was
     rejected, rationale for important changes, recurring review discussions.
     Future reviews benefit from past human judgment, and the repository
     accumulates a durable record of _why_ things changed, not only _what_.
-19. **Repository memory.** Learn repo-specific conventions over time: naming,
+17. **Repository memory.** Learn repo-specific conventions over time: naming,
     architectural boundaries, common migration patterns, known risky areas.
     Local by default, fully under the developer's control.
-20. **Review recipes.** Capture review patterns that worked (React major
+18. **Review recipes.** Capture review patterns that worked (React major
     upgrades, database migrations, auth refactors, API version migrations) and
     reuse them instead of restating the same guidance every review.
-21. **Context engine.** Feed items 18–20 — prior decisions, conventions,
+19. **Context engine.** Feed items 18–20 — prior decisions, conventions,
     architecture, known constraints — to supported agents before they execute
     explicit requests. Better inputs, same boundary: the human still reviews
     and approves.
-22. **Review analytics.** Metrics for improving review practice: completion
+20. **Review analytics.** Metrics for improving review practice: completion
     time, high-risk change distribution, reopened changes, churn, files with
     recurring issues, coverage over time. For improving practices, never for
     evaluating individuals.
-23. **Knowledge graph (experimental).** Explore representing the memory from
+21. **Knowledge graph (experimental).** Explore representing the memory from
     items 18–20 as connected entities (files, modules, decisions, migrations,
     recipes) to deepen context for future reviews and agent interactions —
     never to automate approval.
