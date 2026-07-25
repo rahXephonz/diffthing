@@ -1,0 +1,2 @@
+# www -> apex (301). Cloudflare Pages redirects.
+https://www.diffthing.dev/* https://diffthing.dev/:splat 301!
