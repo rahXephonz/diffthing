@@ -18,7 +18,7 @@ reviews and approves.** Nothing below weakens that.
   reach developers inside the agent tools where AI-assisted changes actually
   originate. These — not the core — are what hold back real adoption.
 
-## v0.3 — "fits my workflow"
+## v0.3+ — "fits my workflow"
 
 4. **VS Code extension.** Open a review from the command palette, jump to
    `file:line`, comment inline. Meets developers where they already work; likely
@@ -32,15 +32,14 @@ reviews and approves.** Nothing below weakens that.
    signed off on, not what the agent believes it did.
 6. **Base flexibility.** Review any range (branch vs main, staged, a specific
    commit), not only working-tree vs `HEAD`.
-7. **One-line shell installer.** `curl -fsSL https://diffthing.dev/install.sh | bash`
-   (CLI style). No Node/npm needed. CI already builds the per-platform
-   binaries for the npm packages but only publishes them there; it must also
-   upload them as GitHub Release assets with a checksums file. Then an
-   `install.sh` that detects OS/arch, downloads the matching binary from the
-   latest release, verifies the checksum, and installs to `~/.local/bin` (or
-   `/usr/local/bin`), hosted on `diffthing.dev` via Cloudflare Pages/Worker.
-   A `.ps1` variant covers Windows. Prerequisite for everything below it:
-   without raw release binaries a plugin can only wrap `npx`.
+7. **One-line shell installer.** ✅ **Shipped.** `curl -fsSL https://diffthing.dev/install.sh | sh`
+   (CLI style), no Node/npm needed. The release workflow now uploads the
+   per-platform binaries as GitHub Release assets with a `SHA256SUMS` file;
+   `install.sh` detects OS/arch, downloads the matching archive from the latest
+   release, verifies the checksum, and installs to `~/.local/bin`, with a `.ps1`
+   variant for Windows. Hosting on `diffthing.dev` (Cloudflare Pages/Worker)
+   lands with the site. This unblocks everything below it: with raw release
+   binaries a plugin no longer has to wrap `npx`.
 8. **Agent plugin / skill distribution.** Ship diffthing as an installable
    plugin for the agent CLIs where AI-assisted changes are made, so the agent
    opens a review itself when it finishes a batch of edits — no one has to
@@ -120,14 +119,16 @@ replace it or automate approval.
 
 - Team / multi-user review.
 - Fully remote-hosted SPA (static build served from `diffthing.dev`, daemon
-  API-only). Not needed for browser trust — item 15's bundled trusted cert
-  already gives the Drizzle zero-prompt UX from the daemon-served SPA. Revisit
-  only if we want the SPA to update independently of the installed daemon.
+  API-only). Not needed for browser trust — the bundled trusted cert (shipped
+  in v0.2.4) already gives the Drizzle zero-prompt UX from the daemon-served
+  SPA. Revisit only if we want the SPA to update independently of the installed
+  daemon.
 - Non-git version control.
 
 ## Sequencing
 
-Persistence shipped in v0.2. Next: **shell installer → agent plugin → VS Code
-extension.** The installer unblocks the plugin, the plugin puts diffthing in
-front of developers at the moment an agent finishes editing, and the extension
-meets the ones who never leave their editor. Everything else is polish on top.
+Persistence (v0.2) and the shell installer (v0.3, item 7) shipped. Next:
+**agent plugin → VS Code extension.** The installer unblocks the plugin, the
+plugin puts diffthing in front of developers at the moment an agent finishes
+editing, and the extension meets the ones who never leave their editor.
+Everything else is polish on top.
