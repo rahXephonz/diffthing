@@ -10,6 +10,37 @@ const description =
 // Cloudflare Web Analytics beacon token (public, appears in page source). Set
 // PUBLIC_CF_ANALYTICS_TOKEN in the build env to enable; omitted in dev.
 const cfAnalyticsToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN;
+
+// Absolute URLs (from astro.config `site`) — required by OG/Twitter scrapers.
+const site = Astro.site ?? new URL("https://diffthing.dev");
+const canonical = new URL(Astro.url.pathname, site).href;
+const ogImage = new URL("/images/social-share.png", site).href;
+
+// Structured data for search engines and AI agents (rich results, grounding).
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Diffthing",
+  alternateName: "diffthing",
+  applicationCategory: "DeveloperApplication",
+  applicationSubCategory: "Code Review",
+  operatingSystem: "macOS, Linux, Windows",
+  description,
+  url: site.href,
+  image: ogImage,
+  downloadUrl: "https://diffthing.dev/install.sh",
+  softwareVersion: "0.3.0",
+  license: "https://opensource.org/licenses/MIT",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  author: {
+    "@type": "Organization",
+    name: "diffthing",
+    url: "https://github.com/rahXephonz/diffthing",
+  },
+  sameAs: ["https://github.com/rahXephonz/diffthing"],
+  keywords:
+    "AI code review, local-first, diff review, code review tool, AI-assisted development, git diff, developer tools",
+};
 ---
 
 <!doctype html>
@@ -19,9 +50,39 @@ const cfAnalyticsToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta
+      name="keywords"
+      content="AI code review, local-first, diff review, code review tool, AI-assisted development, git, developer tools"
+    />
+    <meta name="author" content="diffthing" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="theme-color" content="#1c1c1c" />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Diffthing" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta
+      property="og:image:alt"
+      content="Diffthing — AI organizes the review. You approve the code."
+    />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content="Diffthing product preview" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
