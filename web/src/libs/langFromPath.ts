@@ -1,51 +1,32 @@
-// Extension -> Shiki language id. Deliberately small and best-effort: an
-// unknown extension just renders as plain text, never an error.
-const EXT_LANG: Record<string, string> = {
-  ts: "typescript",
-  tsx: "tsx",
-  js: "javascript",
-  jsx: "jsx",
-  mjs: "javascript",
-  cjs: "javascript",
-  json: "json",
-  jsonc: "jsonc",
-  rs: "rust",
-  toml: "toml",
-  yml: "yaml",
-  yaml: "yaml",
-  css: "css",
-  scss: "scss",
-  html: "html",
-  md: "markdown",
-  mdx: "mdx",
-  sh: "bash",
-  bash: "bash",
-  zsh: "bash",
-  py: "python",
-  go: "go",
-  rb: "ruby",
-  php: "php",
-  sql: "sql",
-  c: "c",
+import { bundledLanguagesInfo } from "shiki";
+
+// Extension / filename -> Shiki language id, derived from Shiki's own bundled
+// language registry rather than a hand-maintained list. Every grammar's id and
+// aliases (which are almost always the file extensions: ts/cts/mts, rs, py, …)
+// map to the canonical id, so all ~235 bundled languages are covered and the
+// table can never drift out of sync with the installed Shiki version.
+const LANG_BY_KEY = new Map<string, string>();
+for (const lang of bundledLanguagesInfo) {
+  LANG_BY_KEY.set(lang.id.toLowerCase(), lang.id);
+  for (const alias of lang.aliases ?? []) LANG_BY_KEY.set(alias.toLowerCase(), lang.id);
+}
+
+// The handful of extensions Shiki doesn't expose as an id or alias — mostly
+// C-family headers. Kept tiny on purpose; everything else comes from the map.
+const EXT_OVERRIDES: Record<string, string> = {
   h: "c",
-  cpp: "cpp",
   hpp: "cpp",
-  java: "java",
-  kt: "kotlin",
-  swift: "swift",
-  dockerfile: "dockerfile",
-  graphql: "graphql",
-  xml: "xml",
-  ini: "ini",
-  vue: "vue",
-  svelte: "svelte",
+  hh: "cpp",
+  hxx: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
 };
 
-export const SUPPORTED_LANGS = Array.from(new Set(Object.values(EXT_LANG)));
-
+/** Best-effort: an unknown extension renders as plain text, never an error. */
 export function langFromPath(path: string): string {
-  const base = path.split("/").pop() ?? path;
-  if (base.toLowerCase() === "dockerfile") return "dockerfile";
-  const ext = base.includes(".") ? base.split(".").pop()!.toLowerCase() : "";
-  return EXT_LANG[ext] ?? "text";
+  const base = (path.split("/").pop() ?? path).toLowerCase();
+  // Extensionless, name-based files (Dockerfile, Makefile, …) resolve by name.
+  if (!base.includes(".")) return LANG_BY_KEY.get(base) ?? "text";
+  const ext = base.slice(base.lastIndexOf(".") + 1);
+  return EXT_OVERRIDES[ext] ?? LANG_BY_KEY.get(ext) ?? "text";
 }

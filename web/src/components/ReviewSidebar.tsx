@@ -1,6 +1,7 @@
+import { AlertDialog } from "@base-ui-components/react/alert-dialog";
 import clsx from "clsx";
 import { Check, CheckCheck, Tag } from "lucide-react";
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { iconUrlForPath, STATUS_CLASS, STATUS_LETTER } from "../libs/fileIcon";
 import type { ClientMsg, FileDiff, Hunk, ReviewState, Step, Walkthrough } from "../libs/protocol";
 import type { DispatchState } from "../libs/store";
@@ -58,6 +59,7 @@ interface ReviewSidebarProps {
 }
 
 export default function ReviewSidebar(props: ReviewSidebarProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const {
     daemonVersion,
     llm,
@@ -264,19 +266,40 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
             "flex items-center justify-center gap-1.5",
             unviewedCount > 0 && "border-green/60 text-green hover:border-green",
           )}
-          onClick={() => {
-            // Marks every hunk viewed and stages each newly-approved file —
-            // a working-tree side effect, so confirm before the sweep.
-            if (window.confirm(`Mark all ${unviewedCount} unviewed hunk(s) as reviewed?`)) {
-              send({ type: "mark_all_viewed" });
-            }
-          }}
+          onClick={() => setConfirmOpen(true)}
           disabled={unviewedCount === 0}
           title="Mark every hunk viewed — use when you've reviewed everything and found no issues"
         >
           <CheckCheck size={14} aria-hidden="true" />
           {unviewedCount === 0 ? "All reviewed" : `Mark all reviewed (${unviewedCount})`}
         </button>
+
+        <AlertDialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialog.Portal>
+            <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px]" />
+            <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(560px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-panel p-7 shadow-2xl">
+              <AlertDialog.Title className="text-base font-semibold text-text">
+                Mark all reviewed
+              </AlertDialog.Title>
+              <AlertDialog.Description className="mt-3 text-sm leading-relaxed text-muted">
+                Mark all {unviewedCount} unviewed hunk{unviewedCount === 1 ? "" : "s"} as reviewed?
+                Fully reviewed files are staged in Git.
+              </AlertDialog.Description>
+              <div className="mt-6 flex justify-end gap-2">
+                <AlertDialog.Close className={chromeButton}>Cancel</AlertDialog.Close>
+                <button
+                  className={clsx(chromeButton, "border-green/60 text-green hover:border-green")}
+                  onClick={() => {
+                    send({ type: "mark_all_viewed" });
+                    setConfirmOpen(false);
+                  }}
+                >
+                  Mark all reviewed
+                </button>
+              </div>
+            </AlertDialog.Popup>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
         <button
           className={chromeButton}
           onClick={() => send({ type: "export_review" })}

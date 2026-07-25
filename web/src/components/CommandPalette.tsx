@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@base-ui-components/react/dialog";
+import { History } from "lucide-react";
 import clsx from "clsx";
 import {
   iconUrlForPath,
@@ -26,6 +27,34 @@ interface Ranked {
   removed: number;
   /** Lower is better: 0 basename-prefix, 1 basename, 2 path. */
   rank: number;
+  /** true when the file was opened from the palette before. */
+  recent: boolean;
+  /** recency position (0 = most recent), Infinity when never opened. */
+  rec: number;
+  /** original file-list index — the stable tiebreaker. */
+  orig: number;
+}
+
+// Recently-opened file paths, most-recent-first, persisted so the list
+// survives reloads. Capped to keep the palette focused.
+const RECENT_KEY = "diffthing:palette-recent";
+const RECENT_MAX = 8;
+
+function loadRecent(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((p): p is string => typeof p === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(v: string[]): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(v));
+  } catch {
+    /* storage unavailable — recency is best-effort */
+  }
 }
 
 function dirname(path: string): string {
@@ -33,12 +62,13 @@ function dirname(path: string): string {
   return i === -1 ? "" : path.slice(0, i + 1);
 }
 
-/** Substring match over basename then full path, ranked so the tightest
- *  matches float up. Empty query keeps original file order. */
-function rankFiles(files: FileDiff[], query: string): Ranked[] {
+/** Substring match over basename then full path. Empty query lists recently
+ *  opened files first (then original order); a query ranks tightest matches
+ *  first, breaking ties toward more-recently-opened files. */
+function rankFiles(files: FileDiff[], query: string, recency: Map<string, number>): Ranked[] {
   const q = query.trim().toLowerCase();
   const rows: Ranked[] = [];
-  for (const file of files) {
+  files.forEach((file, orig) => {
     let added = 0;
     let removed = 0;
     for (const hunk of file.hunks) {
@@ -52,10 +82,15 @@ function rankFiles(files: FileDiff[], query: string): Ranked[] {
     else if (base.startsWith(q)) rank = 0;
     else if (base.includes(q)) rank = 1;
     else if (path.includes(q)) rank = 2;
-    else continue;
-    rows.push({ file, added, removed, rank });
+    else return;
+    const rec = recency.get(file.path);
+    rows.push({ file, added, removed, rank, recent: rec !== undefined, rec: rec ?? Infinity, orig });
+  });
+  if (q === "") {
+    rows.sort((a, b) => a.rec - b.rec || a.orig - b.orig);
+  } else {
+    rows.sort((a, b) => a.rank - b.rank || a.rec - b.rec || a.file.path.localeCompare(b.file.path));
   }
-  if (q !== "") rows.sort((a, b) => a.rank - b.rank || a.file.path.localeCompare(b.file.path));
   return rows;
 }
 
@@ -68,21 +103,23 @@ export default function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [recent, setRecent] = useState<string[]>(() => loadRecent());
   const listRef = useRef<HTMLUListElement>(null);
 
+  const recency = useMemo(() => new Map(recent.map((p, i) => [p, i] as const)), [recent]);
   // iconsVersion is read so the memo recomputes once icons resolve, swapping
   // the placeholder for the real icon URL.
-  const results = useMemo(() => rankFiles(files, query), [files, query]);
+  const results = useMemo(() => rankFiles(files, query, recency), [files, query, recency]);
   void iconsVersion;
 
-  // Reset query + cursor each time the palette opens. Render-phase adjustment
+  // Query persists across opens — it only clears when the user empties the
+  // input. Just reset the cursor to the top on open. Render-phase adjustment
   // (the React "previous value" pattern) rather than an effect, so there's no
   // extra commit + flash of stale results.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setQuery("");
       setActive(0);
     }
   }
@@ -97,7 +134,12 @@ export default function CommandPalette({
     el?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 
-  const choose = (path: string) => {
+  const onChoose = (path: string) => {
+    setRecent((prev) => {
+      const next = [path, ...prev.filter((p) => p !== path)].slice(0, RECENT_MAX);
+      saveRecent(next);
+      return next;
+    });
     onOpenFile(path);
     onOpenChange(false);
   };
@@ -112,7 +154,7 @@ export default function CommandPalette({
     } else if (event.key === "Enter") {
       event.preventDefault();
       const hit = results[activeIndex];
-      if (hit) choose(hit.file.path);
+      if (hit) onChoose(hit.file.path);
     }
   };
 
@@ -144,7 +186,7 @@ export default function CommandPalette({
                 <li key={row.file.path} data-index={i}>
                   <button
                     type="button"
-                    onClick={() => choose(row.file.path)}
+                    onClick={() => onChoose(row.file.path)}
                     onMouseMove={() => setActive(i)}
                     className={clsx(
                       "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
@@ -167,11 +209,18 @@ export default function CommandPalette({
                       </span>
                     )}
                     <span className="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
-                      {(row.added > 0 || row.removed > 0) && (
-                        <span className="text-xs">
-                          <span className="text-green-400">+{row.added}</span>{" "}
-                          <span className="text-highest">-{row.removed}</span>
+                      {row.recent ? (
+                        <span className="flex items-center gap-1 text-xs text-muted">
+                          <History size={12} aria-hidden="true" />
+                          recently opened
                         </span>
+                      ) : (
+                        (row.added > 0 || row.removed > 0) && (
+                          <span className="text-xs">
+                            <span className="text-green-400">+{row.added}</span>{" "}
+                            <span className="text-highest">-{row.removed}</span>
+                          </span>
+                        )
                       )}
                       <span className={clsx("text-xs font-medium", STATUS_CLASS[status])}>
                         {STATUS_LETTER[status]}
