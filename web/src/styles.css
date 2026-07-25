@@ -18,7 +18,7 @@
   --color-medium: #6ea8fe;
   --color-low: #8a93a2;
 
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
   /* Code blocks only (diff hunks) — chrome keeps --font-mono above. */
   --font-code: "Cascadia Code", ui-monospace, monospace;
 }
@@ -35,6 +35,16 @@
   font-weight: 200 700;
   font-display: swap;
   src: url("/fonts/cascadia-code.woff2") format("woff2");
+}
+
+/* UI/chrome font. Self-hosted (strict CSP blocks font CDNs); single variable
+   woff2 (wght 100–900), latin subset. */
+@font-face {
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-tight.woff2") format("woff2");
 }
 
 body {
