@@ -23,11 +23,13 @@ $Target = 'x86_64-pc-windows-msvc'
 $Archive = "diffthing-$Target.zip"
 
 $version = if ($env:DIFFTHING_VERSION) { $env:DIFFTHING_VERSION } else { 'latest' }
-$base = if ($version -eq 'latest') {
-  "https://github.com/$Repo/releases/latest/download"
-} else {
-  "https://github.com/$Repo/releases/download/$version"
+if ($version -eq 'latest') {
+  # Resolve the latest tag via the API — the /releases/latest/download/
+  # redirect can lag after a new release is marked latest.
+  $version = (Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing).tag_name
+  if (-not $version) { throw 'could not resolve the latest release' }
 }
+$base = "https://github.com/$Repo/releases/download/$version"
 
 $tmp = Join-Path $env:TEMP ("diffthing-" + [guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $tmp | Out-Null

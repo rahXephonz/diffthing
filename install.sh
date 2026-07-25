@@ -51,6 +51,17 @@ download() {
   fi
 }
 
+fetch() {
+  # fetch <url> -> stdout
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "$1"
+  else
+    err "need curl or wget to download"
+  fi
+}
+
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -68,10 +79,14 @@ main() {
 
   version="${DIFFTHING_VERSION:-latest}"
   if [ "$version" = "latest" ]; then
-    base="https://github.com/$REPO/releases/latest/download"
-  else
-    base="https://github.com/$REPO/releases/download/$version"
+    # Resolve the latest tag via the API. The /releases/latest/download/
+    # redirect can lag for a while after a new release is marked latest, so we
+    # don't rely on it.
+    version="$(fetch "https://api.github.com/repos/$REPO/releases/latest" \
+      | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    [ -n "$version" ] || err "could not resolve the latest release"
   fi
+  base="https://github.com/$REPO/releases/download/$version"
 
   archive="diffthing-${TARGET}.tar.gz"
   tmp="$(mktemp -d)"
