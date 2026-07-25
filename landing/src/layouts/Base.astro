@@ -16,6 +16,9 @@ const site = Astro.site ?? new URL("https://diffthing.dev");
 const canonical = new URL(Astro.url.pathname, site).href;
 const ogImage = new URL("/images/social-share.png", site).href;
 
+// X/Twitter handle for card attribution. Set to "" to omit the tags.
+const twitterHandle = "@diffthing";
+
 // Structured data for search engines and AI agents (rich results, grounding).
 const jsonLd = {
   "@context": "https://schema.org",
@@ -68,8 +71,9 @@ const jsonLd = {
     <meta property="og:url" content={canonical} />
     <meta property="og:locale" content="en_US" />
     <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="720" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
     <meta
       property="og:image:alt"
       content="Diffthing — AI organizes the review. You approve the code."
@@ -77,6 +81,8 @@ const jsonLd = {
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
+    {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
+    {twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
@@ -84,10 +90,12 @@ const jsonLd = {
 
     <!-- Structured data -->
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preload" href="/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />
     {
       cfAnalyticsToken && (
