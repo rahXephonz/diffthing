@@ -49,6 +49,10 @@ jobs:
 
       - name: Build
         working-directory: landing
+        # Public Cloudflare Web Analytics token (repo Variable, not a secret —
+        # it appears in page source). Unset => no beacon.
+        env:
+          PUBLIC_CF_ANALYTICS_TOKEN: ${{ vars.PUBLIC_CF_ANALYTICS_TOKEN }}
         run: pnpm build
 
       # Direct-upload deploy of the built dist/. --branch=main marks it as a

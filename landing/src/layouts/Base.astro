@@ -6,6 +6,10 @@ import Footer from "../components/Footer.astro";
 const title = "Diffthing — AI organizes the review. You approve the code.";
 const description =
   "Diffthing transforms AI-generated code into a deterministic, prioritized review walkthrough. Local-first. Every approval remains yours.";
+
+// Cloudflare Web Analytics beacon token (public, appears in page source). Set
+// PUBLIC_CF_ANALYTICS_TOKEN in the build env to enable; omitted in dev.
+const cfAnalyticsToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN;
 ---
 
 <!doctype html>
@@ -23,6 +27,16 @@ const description =
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preload" href="/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />
+    {
+      cfAnalyticsToken && (
+        <script
+          is:inline
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={JSON.stringify({ token: cfAnalyticsToken })}
+        />
+      )
+    }
     <!-- No-JS / pre-hydration fallback: reveal content if motion never boots. -->
     <script is:inline>
       document.documentElement.classList.add("js");
