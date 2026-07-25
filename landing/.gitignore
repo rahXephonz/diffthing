@@ -1,3 +1,7 @@
 dist/
 node_modules/
 .astro/
+
+# generated at build by scripts/copy-installers.mjs (source lives at repo root)
+public/install.sh
+public/install.ps1
