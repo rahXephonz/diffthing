@@ -153,6 +153,12 @@ jobs:
     permissions:
       contents: write # attach binaries to the release
     steps:
+      # gh release create shells out to git, so a checkout is required. Fetch
+      # tags so the annotated tag's notes are available to --notes-from-tag.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
       - name: Download release archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -164,27 +170,21 @@ jobs:
         working-directory: dist
         run: sha256sum diffthing-* | tee SHA256SUMS
 
-      # release-plz creates the GitHub Release for this tag on push to main.
-      # That can race the tag-triggered run below, so wait for the release,
-      # then attach the raw binaries + checksums. --clobber keeps re-runs
-      # idempotent. gh infers the repo from GITHUB_REPOSITORY; no checkout
-      # needed. Create the release ourselves only if it never appears (e.g.
-      # a manually pushed tag on a fork without release-plz).
+      # Create the GitHub Release for this tag if it doesn't already exist
+      # (release-plz only makes releases from its own release-PR flow, not from
+      # hand-pushed tags), then attach the raw binaries + checksums. --clobber
+      # keeps re-runs idempotent. Notes come from the annotated tag message,
+      # falling back to auto-generated notes for a lightweight tag.
       - name: Attach assets to release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="$GITHUB_REF_NAME"
-          for i in $(seq 1 30); do
-            if gh release view "$tag" >/dev/null 2>&1; then
-              break
-            fi
-            echo "waiting for release $tag to exist ($i/30)..."
-            sleep 10
-          done
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            echo "release $tag not found after wait; creating it"
-            gh release create "$tag" --title "$tag" --generate-notes
+            echo "creating release $tag"
+            gh release create "$tag" --title "$tag" --target "$GITHUB_SHA" \
+              --notes-from-tag || gh release create "$tag" --title "$tag" \
+              --target "$GITHUB_SHA" --generate-notes
           fi
           gh release upload "$tag" dist/diffthing-* dist/SHA256SUMS --clobber
 
