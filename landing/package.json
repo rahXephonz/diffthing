@@ -2,7 +2,7 @@
   "name": "diffthing-landing",
   "type": "module",
   "version": "0.1.0",
-  "private": false,
+  "private": true,
   "description": "diffting site landing.",
   "scripts": {
     "dev": "node scripts/copy-installers.mjs && astro dev",

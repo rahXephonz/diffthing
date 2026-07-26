@@ -152,4 +152,21 @@
   .wrap {
     @apply relative z-1 mx-auto w-full max-w-300 px-[clamp(20px,5vw,40px)];
   }
+
+  /* acid marker highlight for display headings. An inline background paints the
+     full font content area (~1.21em in Inter Tight), which overflows the tight
+     display line boxes and covers the descenders of the line above. Painting a
+     fixed-height band instead keeps the box inside its own line. */
+  .hl {
+    color: #0a0a0b;
+    background-image: linear-gradient(var(--color-acid), var(--color-acid));
+    background-repeat: no-repeat;
+    background-size: 100% 0.92em;
+    background-position: 0 0.16em;
+    padding-inline: 0.11em;
+    margin-inline: -0.11em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    white-space: nowrap;
+  }
 }
