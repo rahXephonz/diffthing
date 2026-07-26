@@ -14,6 +14,7 @@ on:
     branches: [master]
     paths:
       - "landing/**"
+      - "pnpm-lock.yaml"
       - "install.sh"
       - "install.ps1"
       - ".github/workflows/deploy-landing.yml"
@@ -41,11 +42,11 @@ jobs:
         with:
           node-version: 20
 
-      # landing/ is a standalone project (not a pnpm-workspace member), so
-      # --ignore-workspace keeps it from attaching to the monorepo root.
+      # landing/ is a pnpm-workspace member (see pnpm-workspace.yaml), so the
+      # install runs from the repo root against the root pnpm-lock.yaml. The
+      # --filter keeps it from also installing the web/ workspace deps.
       - name: Install dependencies
-        working-directory: landing
-        run: pnpm install --ignore-workspace --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter diffthing-landing...
 
       - name: Build
         working-directory: landing
